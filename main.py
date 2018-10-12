@@ -27,13 +27,20 @@ conn.app.router.add_post('/{token}/', handle)
 
 def keyboards():
     user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-    user_markup.row('Баланс')
-    user_markup.row('Магазин')
-    user_markup.row('Настройки'u'\U00002699', 'Помощь')
+    user_markup.row('Balance')
+    user_markup.row('Store')
+    user_markup.row('Settings'u'\U00002699', 'Help')
     return user_markup
 
 
-kbrd = keyboards()
+def keyboard_back_button():
+    user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
+    user_markup.row('Back')
+    return user_markup
+
+
+KEYBOARD = keyboards()
+BACK_BUTTON = keyboard_back_button()
 
 
 @conn.bot.message_handler(commands=['start'])
@@ -46,19 +53,18 @@ def handle_start(message):
         reg_key = telegram_id[3]
     else:
         reg_key = 1
-        conn.bot.send_message(uid, 'Добро пожаловать в телеграмм-бот MyKPI_bot! \nПожалуйста, зарегистрируйтесь.')
+        conn.bot.send_message(uid, 'Welcome to MyKPI_bot, TeamScore clone! \nSign up, please!')
     if reg_key == 1:
         keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-        button_contact = types.KeyboardButton(text="Зарегистрироваться", request_contact=False)
+        button_contact = types.KeyboardButton(text="Sign up", request_contact=False)
         keyboard.add(button_contact)
         conn.bot.send_message(uid,
-                              'ВНИМАНИЕ! У вас должен быть указан @username (Settings ---> Edit Profile). '
-                              'Также, в случае, если Вы используете VPN/Proxy-соединение, регистрация может пройти некорректно! '
-                              'После регистрации вы можете использовать VPN/Proxy',
+                              'NOTE! You should have a @username (Settings ---> Edit Profile). '
+                              'Also, in case you use a VPN/Proxy-conection, registration may fail! '
+                              'After registration you may use VPN/Proxy unhindered',
                               reply_markup=keyboard)
     else:
-        user_markup = kbrd
-        conn.bot.send_message(uid, 'Вы в главном меню', reply_markup=user_markup)
+        conn.bot.send_message(uid, 'You are at the main menu.', reply_markup=KEYBOARD)
 
 
 @conn.bot.message_handler(commands=['kill'])
@@ -67,8 +73,8 @@ def handle_new_chat(message):
     inline_keyboard = types.InlineKeyboardMarkup()
     kill = types.InlineKeyboardButton(text='Yes', callback_data=' kill')
     inline_keyboard.add(kill)
-    user_markup = kbrd
-    conn.bot.send_message(uid, 'This command will delete all your data.', reply_markup=user_markup)
+    
+    conn.bot.send_message(uid, 'This command will delete all your data.', reply_markup=KEYBOARD)
     conn.bot.send_message(uid, 'Are you sure?', reply_markup=inline_keyboard)
 
 
@@ -165,11 +171,11 @@ def handle_com(message):
                                            yourself[6]))
                                 db.close()
                                 conn.bot.send_message(uid,
-                                                      'Вы вознаградили '
+                                                      'You rewarded '
                                                       + data_for_add[1]
-                                                      + ' в количестве: '
+                                                      + ' quantity: '
                                                       + data_for_add[2]
-                                                      + ' Причина: '
+                                                      + ' reason: '
                                                       + reason_finish1)
                     else:
                         conn.bot.send_message(message.chat.id, "Unknown quantity: " + data_for_add[2])
@@ -232,11 +238,11 @@ def handle_com(message):
                                                                                                        yourself[6]))
                                 db.close()
                                 conn.bot.send_message(uid,
-                                                      'Вы оштрафовали '
+                                                      'You are fined '
                                                       + data_for_add[1]
-                                                      + ' в количестве: '
+                                                      + ' quantity: '
                                                       + data_for_add[2]
-                                                      + ' Причина: '
+                                                      + ' reason: '
                                                       + reason_finish1)
                     else:
                         conn.bot.send_message(message.chat.id, "Unknown quantity: " + data_for_add[2])
@@ -336,11 +342,11 @@ def handle_com_team(message):
                         i = 0
                         print(i)
                 conn.bot.send_message(uid,
-                                      'Вы вознаградили команду чата: '
+                                      'You rewarded team. Chat: '
                                       + message.chat.title
-                                      + '\nВ количестве (каждому): '
+                                      + '\nquantity (each): '
                                       + str(data_to_add_finish)
-                                      + '\nПричина: '
+                                      + '\nReason: '
                                       + reason_finish)
             else:
                 conn.bot.send_message(uid, 'ERROR: You are not a manager of this group chat.'
@@ -443,11 +449,11 @@ def handle_com_team(message):
                         i = 0
                         print(i)
                 conn.bot.send_message(uid,
-                                      'Вы оштрафовали команду чата: '
+                                      'You are fined team. Chat: '
                                       + message.chat.title
-                                      + '\nВ количестве (каждому): '
+                                      + '\nquantity (each): '
                                       + str(data_to_add_finish)
-                                      + '\nПричина: '
+                                      + '\nReason: '
                                       + reason_finish)
             else:
                 conn.bot.send_message(uid, 'ERROR: You are not a manager of this group chat. '
@@ -460,7 +466,7 @@ def handle_contact(message):
     db = dbconn.PGadmin()
     user_position = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
     db.close()
-    if message.text == 'Зарегистрироваться':
+    if message.text == 'Sign up':
         uid = message.from_user.id
         user_name = '@' + message.from_user.username
         if message.from_user.last_name is None:
@@ -471,8 +477,7 @@ def handle_contact(message):
         account = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
         db.close()
         if account is not None:
-            user_markup = kbrd
-            conn.bot.send_message(uid, 'You are already registered', reply_markup=user_markup)
+            conn.bot.send_message(uid, 'You are already registered', reply_markup=KEYBOARD)
         else:
             db = dbconn.PGadmin()
             db.insert('users (telegram_id,name,reg_key,user_position,user_name)', (uid,
@@ -486,29 +491,29 @@ def handle_contact(message):
                                   'Write the name of your company/team, please. '
                                   'If a match would not found a new company will be created.',
                                   reply_markup=hide_keyboard)
-    elif message.text == 'Помощь':
+    elif message.text == 'Help':
         user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-        user_markup.row('Связаться с нами'u'\U00002709')
-        user_markup.row('Назад')
+        user_markup.row('Contact us'u'\U00002709')
+        user_markup.row('Back')
         inline_keyboard = types.InlineKeyboardMarkup()
         help_button = types.InlineKeyboardButton(text='Open', callback_game='t.me/MyKPI_bot?game=Manual')
         inline_keyboard.add(help_button)
-        conn.bot.send_message(uid, "Помощь", reply_markup=user_markup)
+        conn.bot.send_message(uid, "Help", reply_markup=user_markup)
         conn.bot.send_game(chat_id=message.chat.id, game_short_name='Manual', reply_markup=inline_keyboard)
-    elif message.text == 'Назад':
+    elif message.text == 'Back':
         db = dbconn.PGadmin()
         db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
         db.close()
-        user_markup = kbrd
-        conn.bot.send_message(uid, 'Главное меню', reply_markup=user_markup)
-    elif message.text == 'Настройки'u'\U00002699':
+        
+        conn.bot.send_message(uid, 'Main menu', reply_markup=KEYBOARD)
+    elif message.text == 'Settings'u'\U00002699':
         user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-        user_markup.row('Полная выписка')
-        user_markup.row('Управление магазином')
-        user_markup.row('Переназначение менеджера')
-        user_markup.row('Назад')
-        conn.bot.send_message(uid, 'Настройки', reply_markup=user_markup)
-    elif message.text == 'Полная выписка':
+        user_markup.row('Full statement')
+        user_markup.row('Manage store')
+        user_markup.row('Reassigning Manager')
+        user_markup.row('Back')
+        conn.bot.send_message(uid, 'Settings', reply_markup=user_markup)
+    elif message.text == 'Full statement':
         global url
         db = dbconn.PGadmin()
         manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
@@ -517,9 +522,7 @@ def handle_contact(message):
             db = dbconn.PGadmin()
             statement = db.select_all1('*', 'operations', "company='{0}'".format(manager[6]))
             db.close()
-            user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-            user_markup.row('Назад')
-            conn.bot.send_message(uid, 'Please wait...', reply_markup=user_markup)
+            conn.bot.send_message(uid, 'Please wait...', reply_markup=BACK_BUTTON)
             spreadsheet = gg.service.spreadsheets().create(body={'properties': {'title': manager[5],
                                                                                 'locale': 'ru_RU'},
                                                                  'sheets': [{'properties': {'sheetType': 'GRID',
@@ -563,93 +566,81 @@ def handle_contact(message):
             db = dbconn.PGadmin()
             db.update('operations', 'num=1', "company='{}'".format(manager[6]))
             db.close()
-            conn.bot.send_message(uid, url, reply_markup=user_markup)
+            conn.bot.send_message(uid, url, reply_markup=BACK_BUTTON)
         else:
-            user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-            user_markup.row('Назад')
-            conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=user_markup)
-    elif message.text == 'Баланс':
+            conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
+    elif message.text == 'Balance':
         db = dbconn.PGadmin()
         balance = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
         db.close()
         if balance is not None:
-            user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-            user_markup.row('Назад')
             inline_keyboard = types.InlineKeyboardMarkup()
-            statement = types.InlineKeyboardButton(text='Выписка', callback_data=balance[5] + ' statement')
+            statement = types.InlineKeyboardButton(text='Statement', callback_data=balance[5] + ' statement')
             inline_keyboard.add(statement)
-            conn.bot.send_message(uid, 'Ваш баланс: ', reply_markup=user_markup)
+            conn.bot.send_message(uid, 'Your balance: ', reply_markup=BACK_BUTTON)
             conn.bot.send_message(uid, str(balance[8]), reply_markup=inline_keyboard)
         else:
             user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-            user_markup.row('Зарегистрироваться')
-            conn.bot.send_message(uid, 'Пожалуйста, зарегистрируйтесь', reply_markup=user_markup)
-    elif message.text == 'Переназначение менеджера':
+            user_markup.row('Sign up')
+            conn.bot.send_message(uid, 'Sign up, please', reply_markup=user_markup)
+    elif message.text == 'Reassigning Manager':
         db = dbconn.PGadmin()
         manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
         db.close()
-        user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-        user_markup.row('Назад')
         if manager is not None:
             db = dbconn.PGadmin()
             db.update('users', 'user_position=3', 'telegram_id={}'.format(uid))
             db.close()
-            conn.bot.send_message(uid, "Please specify @username of the colleague.", reply_markup=user_markup)
+            conn.bot.send_message(uid, "Please specify @username of the colleague.", reply_markup=BACK_BUTTON)
         else:
             conn.bot.send_message(uid,
                                   'ERROR: You are not in the managers list, who can set another managers.',
-                                  reply_markup=user_markup)
-    elif message.text == 'Управление магазином':
+                                  reply_markup=BACK_BUTTON)
+    elif message.text == 'Manage store':
         db = dbconn.PGadmin()
         manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
         db.close()
-        user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-        user_markup.row('Назад')
         if manager is not None:
             db = dbconn.PGadmin()
             store = db.select_all1('*', 'store', 'manager={}'.format(uid))
             db.close()
             if len(store) == 0:
-                conn.bot.send_message(uid, 'Нет товаров.')
+                conn.bot.send_message(uid, 'No items.')
                 db = dbconn.PGadmin()
                 db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
                 db.close()
-                conn.bot.send_message(uid, 'Пожалуйста, напишите описание нового товара', reply_markup=user_markup)
+                conn.bot.send_message(uid, 'Please, specify an item.', reply_markup=BACK_BUTTON)
             else:
                 for i in range(len(store)):
                     db = dbconn.PGadmin()
                     db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
                     db.close()
                     inline_keyboard = types.InlineKeyboardMarkup()
-                    delete = types.InlineKeyboardButton(text='Удалить', callback_data=store[i][0] + '_item')
+                    delete = types.InlineKeyboardButton(text='Delete', callback_data=store[i][0] + '_item')
                     inline_keyboard.add(delete)
                     conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
-                    conn.bot.send_message(uid, 'Пожалуйста, напишите описание нового товара', reply_markup=user_markup)
+                    conn.bot.send_message(uid, 'Please, specify an item.', reply_markup=BACK_BUTTON)
         else:
-            conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=user_markup)
-    elif message.text == 'Магазин':
-        user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-        user_markup.row('Назад')
+            conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
+    elif message.text == 'Store':
         db = dbconn.PGadmin()
         manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
         store = db.select_all1('*', 'store', "manager='{}'".format(manager[11]))
         db.close()
         if len(store) == 0:
-            conn.bot.send_message(uid, 'Нет товаров.', reply_markup=user_markup)
+            conn.bot.send_message(uid, 'No items.', reply_markup=BACK_BUTTON)
         else:
             for i in range(len(store)):
                 inline_keyboard = types.InlineKeyboardMarkup()
-                buy = types.InlineKeyboardButton(text='Купить', callback_data=str(store[i][0]) + '_buy')
+                buy = types.InlineKeyboardButton(text='Buy', callback_data=str(store[i][0]) + '_buy')
                 inline_keyboard.add(buy)
                 conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
-                conn.bot.send_message(uid, 'Пожалуйста, выберите товар.', reply_markup=user_markup)
-    elif message.text == 'Связаться с нами'u'\U00002709':
-        user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-        user_markup.row('Назад')
+            conn.bot.send_message(uid, 'Choose an item.', reply_markup=BACK_BUTTON)
+    elif message.text == 'Contact us'u'\U00002709':
         conn.bot.send_message(uid,
-                              'Мы неравнодушны к Вашему мнению и всегда рады Вам помочь в любой ситуации. '
-                              'Пожалуйста, задавайте Ваши вопросы \n@Max_Urzhumtsev',
-                              reply_markup=user_markup)
+                              'We are always happy to help you in any situation. '
+                              'Please, contact: \n@Max_Urzhumtsev',
+                              reply_markup=BACK_BUTTON)
     elif user_position[4] == 1:
         if message.text:
             db = dbconn.PGadmin()
@@ -683,7 +674,7 @@ def handle_contact(message):
             else:
                 conn.bot.send_message(uid, 'Error. Try more.')
 
-    elif user_position[4] == 3:  # Переназначение менеджера
+    elif user_position[4] == 3:  # Reassigning Manager
         if message.text:
             db = dbconn.PGadmin()
             manager = db.select_single('*', 'users', "user_name='{}'".format(message.text.lower()))
@@ -705,42 +696,36 @@ def handle_contact(message):
                                       + message.text + ' ?',
                                       reply_markup=inline_keyboard)
             else:
-                user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-                user_markup.row('Назад')
                 conn.bot.send_message(uid,
                                       "User "
                                       + message.text
                                       + " not found. Don't you forget to put '@' before 'username'?",
-                                      reply_markup=user_markup)
+                                      reply_markup=BACK_BUTTON)
     elif user_position[4] == 4:  # Добавление наименования нового товара
         if message.text:
-            user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-            user_markup.row('Назад')
             db = dbconn.PGadmin()
             db.insert('store (item,manager,price)', (message.text, uid, 0))
             db.update('users', 'user_position=5', 'telegram_id={}'.format(uid))
             db.close()
             conn.bot.send_message(uid,
-                                  'Добавлено. Теперь отправьте, пожалуйста, стоимость товара',
-                                  reply_markup=user_markup)
+                                  'Added. Please specify cost of the item.',
+                                  reply_markup=BACK_BUTTON)
     elif user_position[4] == 5:  # Добавление стоимости нового товара
         if message.text:
-            user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-            user_markup.row('Назад')
             db = dbconn.PGadmin()
             db.update('store', 'price={}'.format(message.text), 'price=0')
             store = db.select_all1('*', 'store', 'manager={}'.format(uid))
             db.close()
-            conn.bot.send_message(uid, 'Готово.', reply_markup=user_markup)
+            conn.bot.send_message(uid, 'Done.', reply_markup=BACK_BUTTON)
             for i in range(len(store)):
                 db = dbconn.PGadmin()
                 db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
                 db.close()
                 inline_keyboard = types.InlineKeyboardMarkup()
-                delete = types.InlineKeyboardButton(text='Удалить', callback_data=store[i][0] + '_item')
+                delete = types.InlineKeyboardButton(text='Delete', callback_data=store[i][0] + '_item')
                 inline_keyboard.add(delete)
                 conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
-            conn.bot.send_message(uid, 'Пожалуйста, напишите описание нового товара', reply_markup=user_markup)
+            conn.bot.send_message(uid, 'Please specify new item.', reply_markup=BACK_BUTTON)
 
 
 @conn.bot.callback_query_handler(func=lambda call: True)
@@ -752,10 +737,10 @@ def callback_inline(call):
                 db = dbconn.PGadmin()
                 db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
                 db.close()
-                user_markup = kbrd
+                
                 conn.bot.send_message(uid,
                                       "Done. Please don't forget to set admins rights for a new manager in group chat.",
-                                      reply_markup=user_markup)
+                                      reply_markup=KEYBOARD)
             elif 'kill' in call.data:
                 db = dbconn.PGadmin()
                 db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
@@ -783,7 +768,6 @@ def callback_inline(call):
                           'user_position=0, my_manager={}'.format(call.from_user.id),
                           'telegram_id={}'.format(uid))
                 db.close()
-                user_markup = kbrd
                 inline_keyboard = types.InlineKeyboardMarkup()
                 help_button = types.InlineKeyboardButton(text='Open',
                                                          callback_game='t.me/MyKPI_bot?game=Manual')
@@ -791,15 +775,14 @@ def callback_inline(call):
                 conn.bot.send_game(chat_id=call.message.chat.id,
                                    game_short_name='Manual',
                                    reply_markup=inline_keyboard)
-                conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=user_markup)
+                conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
             elif 'item' in call.data:
                 call_data_to_split = format(call.data)
                 call_data = call_data_to_split.split('_')
                 db = dbconn.PGadmin()
                 db.delete_single('store', 'item', "'" + call_data[0] + "'")
                 db.close()
-                user_markup = kbrd
-                conn.bot.send_message(uid, "Deleted", reply_markup=user_markup)
+                conn.bot.send_message(uid, "Deleted", reply_markup=KEYBOARD)
             elif 'buy' in call.data:
                 call_data_to_split = format(call.data)
                 call_data = call_data_to_split.split('_')
@@ -816,8 +799,7 @@ def callback_inline(call):
                                                                                        store[0],
                                                                                        yourself[6]))
                 db.close()
-                user_markup = kbrd
-                conn.bot.send_message(uid, "Done", reply_markup=user_markup)
+                conn.bot.send_message(uid, "Done.", reply_markup=KEYBOARD)
             elif 'delegate' in call.data:
                 call_data_to_split = format(call.data)
                 call_data = call_data_to_split.split(' ')
@@ -830,29 +812,26 @@ def callback_inline(call):
                 db.delete_single('managers', 'user_name', "'" + user_name + "'")
                 db.insert('managers (user_name, num)', (call_data[0], 0))
                 db.close()
-                user_markup = kbrd
                 conn.bot.send_message(uid,
                                       "All rights have been delegated. "
                                       "You can't send /rewardteam and /penaltyteam commands anymore.",
-                                      reply_markup=user_markup)
+                                      reply_markup=KEYBOARD)
             elif 'cancel' in call.data:
                 call_data_to_split = format(call.data)
                 call_data = call_data_to_split.split(' ')
-                user_markup = kbrd
                 db = dbconn.PGadmin()
                 db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
                 db.update('users', 'manager=0', "user_name='{}'".format(call_data[0]))
                 db.close()
-                conn.bot.send_message(uid, 'Canceled.', reply_markup=user_markup)
+                conn.bot.send_message(uid, 'Canceled.', reply_markup=KEYBOARD)
             elif 'choose' in call.data:
                 call_data_to_split = format(call.data)
                 call_data = call_data_to_split.split(' ')
-                user_markup = kbrd
                 db = dbconn.PGadmin()
                 db.update('users', 'my_manager={}'.format(call_data[0]), 'telegram_id={}'.format(uid))
                 db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
                 db.close()
-                conn.bot.send_message(uid, 'Вы в главном меню.', reply_markup=user_markup)
+                conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
             elif 'statement' in call.data:
                 global url
                 call_data_to_split = format(call.data)
@@ -860,9 +839,8 @@ def callback_inline(call):
                 db = dbconn.PGadmin()
                 statement = db.select_all1('*', 'operations', "to_whom='{0}'".format(call_data[0]))
                 db.close()
-                user_markup = kbrd
                 if len(statement) == 0:
-                    conn.bot.send_message(uid, 'No transactions found', reply_markup=user_markup)
+                    conn.bot.send_message(uid, 'No transactions found.', reply_markup=KEYBOARD)
                 else:
                     conn.bot.send_message(uid, 'Please wait...')
                     spreadsheet = gg.service.spreadsheets().create(body={'properties': {'title': call_data[0],
@@ -906,7 +884,7 @@ def callback_inline(call):
                     db = dbconn.PGadmin()
                     db.update('operations', 'num=1', "to_whom='{}'".format(call_data[0]))
                     db.close()
-                    conn.bot.send_message(uid, url, reply_markup=user_markup)
+                    conn.bot.send_message(uid, url, reply_markup=KEYBOARD)
         else:
             if call.message.game.description == 'Manual':
                 conn.bot.answer_callback_query(callback_query_id=call.id,
@@ -920,3 +898,5 @@ web.run_app(
     host=conn.WEBHOOK_LISTEN,
     port=conn.WEBHOOK_PORT,
 )
+
+# TODO - make functions for other commands instead "content_types=['text']"
