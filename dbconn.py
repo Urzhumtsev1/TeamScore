@@ -1,16 +1,17 @@
 #!/usr/bin/python3.5
 # -*- coding: utf-8 -*-
+
 import psycopg2
-import variables
+import constants
 
 
 class PGadmin:
     def __init__(self):
-        self.connection = psycopg2.connect(database=variables.DATABASE,
-                                    user=variables.USER,
-                                    password=variables.PASSWORD,
-                                    host=variables.HOST,
-                                    port=variables.PORT)
+        self.connection = psycopg2.connect(database=constants.DATABASE,
+                                           user=constants.USER,
+                                           password=constants.PASSWORD,
+                                           host=constants.HOST,
+                                           port=constants.PORT)
         self.cursor = self.connection.cursor()
 
     def select_all(self, table):
