@@ -13,6 +13,7 @@ gg = google_credentials.GgCredits()
 conn = my_conn.MyConn()
 
 
+# Process webhook calls
 async def handle(request):
     if request.match_info.get('token') == conn.bot.token:
         request_body_dict = await request.json()
@@ -25,6 +26,7 @@ async def handle(request):
 conn.app.router.add_post('/{token}/', handle)
 
 
+# Frequently repeatable keyboard
 def keyboards():
     user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
     user_markup.row('Balance')
@@ -33,6 +35,7 @@ def keyboards():
     return user_markup
 
 
+# Frequently repeatable back button
 def keyboard_back_button():
     user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
     user_markup.row('Back')
@@ -43,8 +46,10 @@ KEYBOARD = keyboards()
 BACK_BUTTON = keyboard_back_button()
 
 
+# First command which user can send to telegram bot
 @conn.bot.message_handler(commands=['start'])
 def handle_start(message):
+    # Checks if user is new or in our db
     uid = message.from_user.id
     db = dbconn.PGadmin()
     telegram_id = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
@@ -55,6 +60,7 @@ def handle_start(message):
         reg_key = 1
         conn.bot.send_message(uid, 'Welcome to MyKPI_bot, TeamScore clone! \nSign up, please!')
     if reg_key == 1:
+        # If user is new
         keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
         button_contact = types.KeyboardButton(text="Sign up", request_contact=False)
         keyboard.add(button_contact)
@@ -67,6 +73,7 @@ def handle_start(message):
         conn.bot.send_message(uid, 'You are at the main menu.', reply_markup=KEYBOARD)
 
 
+# if it is necessary you can delete all your data from db
 @conn.bot.message_handler(commands=['kill'])
 def handle_new_chat(message):
     uid = message.from_user.id
@@ -78,7 +85,9 @@ def handle_new_chat(message):
     conn.bot.send_message(uid, 'Are you sure?', reply_markup=inline_keyboard)
 
 
-@conn.bot.message_handler(commands=['new'])  # Регистрация в чатах нужна, чтобы юзеры такой в своих чатах не набивали себе цену.
+# Manager must register bot in chat if we want our users not to cheat
+# Otherwise user can create chat, add bot and reward yourself with another account.
+@conn.bot.message_handler(commands=['new'])
 def handle_new_chat(message):
     uid = message.from_user.id
     user_name = '@' + message.from_user.username.lower()
@@ -95,7 +104,7 @@ def handle_new_chat(message):
             if manager is None:
                 conn.bot.send_message(uid,
                                       'ERROR: Sorry! But you are not in the list of managers or bot is not paid yet. '
-                                      'Please, contact us: help@tg-devs.com')
+                                      'Please, contact us: @Max_Urzhumtsev')
             elif manager[0].lower() == user_name.lower():
                 db = dbconn.PGadmin()
                 db.insert('chats (telegram_id,user_name,chat_id,company)', (uid,
@@ -107,14 +116,16 @@ def handle_new_chat(message):
             else:
                 conn.bot.send_message(uid,
                                       'ERROR: Sorry! But you are not in the list of managers or bot is not paid yet. '
-                                      'Please, contact us: help@tg-devs.com')
+                                      'Please, contact us: @Max_Urzhumtsev')
         else:
             conn.bot.send_message(uid, 'ERROR: Bot is already registered in this chat.')
 
 
-@conn.bot.message_handler(commands=['reward'])
+@conn.bot.message_handler(commands=['reward', 'penalty'])
 def handle_com(message):
     uid = message.from_user.id
+    # Trying to figure out if user want to reward/penalty: yourself, in bot interface or in chat.
+    # We will use this data also in insertion of operation.
     db = dbconn.PGadmin()
     yourself = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
     chat = db.select_single('*', 'chats', 'chat_id={}'.format(message.chat.id))
@@ -130,122 +141,75 @@ def handle_com(message):
                                   "If you are manager and bot is paid, please, push /new to register it. "
                                   "Else you will get an ERROR.")
     elif chat[2] == message.chat.id:
+        # Split message into components
         data_to_split = format(message.text)
         data_for_add = data_to_split.split(' ')
         reason_len = len(data_for_add)
         reason1 = data_for_add[3:reason_len]
         reason_finish1 = ' '.join(reason1)
+        # Finding the user to reward/penalty from message
+        db = dbconn.PGadmin()
+        user = db.select_single('*',
+                                'users',
+                                "user_name='{}'".format(data_for_add[1].lower()))
+        db.close()
+        quantity = data_for_add[2].isdigit()
+        # Define if the user allowed to be rewarded in chat
+        status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=user[1])
+        if user is None:
+            conn.bot.send_message(message.chat.id, "Invalid username")
+            return 0
         if data_for_add[1].lower() == yourself[5]:
             conn.bot.send_message(uid, "You can't reward yourself")
+            return 0
+        if data_for_add[2] == '':
+            conn.bot.send_message(message.chat.id, "Too much spaces between @username and quantity. Should be only one.")
+            return 0
+        if quantity is False:
+            conn.bot.send_message(message.chat.id, "Unknown quantity: " + data_for_add[2])
+            return 0
+        if reason_len <= 3:
+            conn.bot.send_message(message.chat.id, "Please specify the reason.")
+            return 0
+        if status.status == 'restricted' or status.status == 'left' or status.status == 'kicked':
+            conn.bot.send_message(message.chat.id, "Invalid username for this chat")
+            return 0
         else:
-            if data_for_add[2] == '':
-                conn.bot.send_message(message.chat.id, "Too much spaces between @username and quantity. Should be only one.")
-            else:
+            if data_for_add[0] == '/reward':
                 db = dbconn.PGadmin()
-                user = db.select_single('*',
-                                        'users',
-                                        "user_name='{}'".format(data_for_add[1].lower()))
-                db.close()
-                if user is None:
-                    conn.bot.send_message(message.chat.id, "Invalid username")
-                else:
-                    x = data_for_add[2].isdigit()
-                    if x is True:
-                        if reason_len <= 3:
-                            conn.bot.send_message(message.chat.id, "Please specify the reason.")
-                        else:
-                            status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=user[1])
-                            if status.status == 'restricted' or status.status == 'left' or status.status == 'kicked' :
-                                conn.bot.send_message(message.chat.id, "Invalid username for this chat")
-                            else:
-                                db = dbconn.PGadmin()
-                                cur_date = db.select('CURRENT_DATE')
-                                db.update('users',
-                                          'sum=sum +{}'.format(data_for_add[2]),
-                                          "user_name='{}'".format(data_for_add[1].lower()))
-                                db.insert('operations (who,to_whom,date,command,sum,reason,company)',
-                                          (yourself[5], data_for_add[1].lower(),
-                                           format(cur_date[0]), data_for_add[0],
-                                           data_for_add[2],
-                                           reason_finish1,
-                                           yourself[6]))
-                                db.close()
-                                conn.bot.send_message(uid,
-                                                      'You rewarded '
-                                                      + data_for_add[1]
-                                                      + ' quantity: '
-                                                      + data_for_add[2]
-                                                      + ' reason: '
-                                                      + reason_finish1)
-                    else:
-                        conn.bot.send_message(message.chat.id, "Unknown quantity: " + data_for_add[2])
-
-
-@conn.bot.message_handler(commands=['penalty'])
-def handle_com(message):
-    uid = message.from_user.id
-    db = dbconn.PGadmin()
-    yourself = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
-    chat = db.select_single('*', 'chats', 'chat_id={}'.format(message.chat.id))
-    db.close()
-    if chat is None:
-        if message.chat.id == uid:
-            conn.bot.send_message(uid, "Please reward/penalty in group chats, "
-                                       "not in bot interface, so the Team could see your decisions.")
-        else:
-            conn.bot.send_message(message.chat.id,
-                                  "Bot is not registered in this chat. "
-                                  "If you are manager and bot is paid, please, push /new to register it. "
-                                  "Else you will get an ERROR.")
-    elif chat[2] == message.chat.id:
-        data_to_split = format(message.text)
-        data_for_add = data_to_split.split(' ')
-        reason_len = len(data_for_add)
-        reason1 = data_for_add[3:reason_len]
-        reason_finish1 = ' '.join(reason1)
-        if data_for_add[1].lower() == yourself[5]:
-            conn.bot.send_message(uid, "You can't penalty yourself")
-        else:
-            if data_for_add[2] == '':
-                conn.bot.send_message(message.chat.id, "Too much spaces between @username and quantity. Should be only one.")
-            else:
+                db.update('users',
+                          'sum=sum +{}'.format(data_for_add[2]),
+                          "user_name='{}'".format(data_for_add[1].lower()))
+                conn.bot.send_message(uid,
+                                      'You rewarded '
+                                      + data_for_add[1]
+                                      + ' quantity: '
+                                      + data_for_add[2]
+                                      + ' reason: '
+                                      + reason_finish1)
+            elif data_for_add[0] == '/penalty':
                 db = dbconn.PGadmin()
-                user = db.select_single('*', 'users', "user_name='{}'".format(data_for_add[1].lower()))
-                db.close()
-                if user is None:
-                    conn.bot.send_message(message.chat.id, "Invalid username")
-                else:
-                    x = data_for_add[2].isdigit()
-                    if x is True:
-                        if reason_len <= 3:
-                            conn.bot.send_message(message.chat.id, "Please specify the reason.")
-                        else:
-                            status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=user[1])
-                            if status.status == 'restricted' or status.status == 'left' or status.status == 'kicked':
-                                conn.bot.send_message(message.chat.id, "Invalid username for this chat")
-                            else:
-                                db = dbconn.PGadmin()
-                                cur_date = db.select('CURRENT_DATE')
-                                db.update('users',
-                                          'sum=sum -{}'.format(data_for_add[2].lower()),
-                                          "user_name='{}'".format(data_for_add[1].lower()))
-                                db.insert('operations (who,to_whom,date,command,sum,reason,company)', (yourself[5],
-                                                                                                       data_for_add[1].lower(),
-                                                                                                       format(cur_date[0]),
-                                                                                                       data_for_add[0],
-                                                                                                       data_for_add[2],
-                                                                                                       reason_finish1,
-                                                                                                       yourself[6]))
-                                db.close()
-                                conn.bot.send_message(uid,
-                                                      'You are fined '
-                                                      + data_for_add[1]
-                                                      + ' quantity: '
-                                                      + data_for_add[2]
-                                                      + ' reason: '
-                                                      + reason_finish1)
-                    else:
-                        conn.bot.send_message(message.chat.id, "Unknown quantity: " + data_for_add[2])
+                db.update('users',
+                          'sum=sum -{}'.format(data_for_add[2].lower()),
+                          "user_name='{}'".format(data_for_add[1].lower()))
+                conn.bot.send_message(uid,
+                                      'You are fined '
+                                      + data_for_add[1]
+                                      + ' quantity: '
+                                      + data_for_add[2]
+                                      + ' reason: '
+                                      + reason_finish1)
+            # Insertion to the history of operations
+            cur_date = db.select('CURRENT_DATE')
+            db.insert('operations (who,to_whom,date,command,sum,reason,company)',
+                      (yourself[5],
+                       data_for_add[1].lower(),
+                       format(cur_date[0]),
+                       data_for_add[0],
+                       data_for_add[2],
+                       reason_finish1,
+                       yourself[6]))
+            db.close()
 
 
 @conn.bot.message_handler(commands=['rewardteam'])
