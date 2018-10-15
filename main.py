@@ -62,6 +62,7 @@ def handle_start(message):
     if reg_key == 1:
         # If user is new
         keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        # See below group of functions which handle commands from keyboard. In this case 'Sign up'.
         button_contact = types.KeyboardButton(text="Sign up", request_contact=False)
         keyboard.add(button_contact)
         conn.bot.send_message(uid,
@@ -71,6 +72,34 @@ def handle_start(message):
                               reply_markup=keyboard)
     else:
         conn.bot.send_message(uid, 'You are at the main menu.', reply_markup=KEYBOARD)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Sign up')
+def handle_sign_up(message):
+    uid = message.from_user.id
+    user_name = '@' + message.from_user.username
+    if message.from_user.last_name is None:
+        name = format(message.from_user.first_name)
+    else:
+        name = format(message.from_user.first_name + ' ' + message.from_user.last_name)
+    db = dbconn.PGadmin()
+    account = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
+    db.close()
+    if account is not None:
+        conn.bot.send_message(uid, 'You are already registered', reply_markup=KEYBOARD)
+    else:
+        db = dbconn.PGadmin()
+        db.insert('users (telegram_id,name,reg_key,user_position,user_name)', (uid,
+                                                                               name,
+                                                                               0,
+                                                                               1,
+                                                                               user_name.lower()))
+        db.close()
+        hide_keyboard = telebot.types.ReplyKeyboardRemove()
+        conn.bot.send_message(uid,
+                              'Write the name of your company/team, please. '
+                              'If a match would not found a new company will be created.',
+                              reply_markup=hide_keyboard)
 
 
 # if it is necessary you can delete all your data from db
@@ -423,6 +452,202 @@ def handle_com_team(message):
                 conn.bot.send_message(uid, 'ERROR: You are not a manager of this group chat. '
                                            '\nPS.: Also Manager must have admin rights in group chat.')
 
+# ================================================================================================================================
+# ================================== GROUP OF FUNCTIONS WHICH ARE HANDLE COMMANDS FROM KEYBOARD ==================================
+# ================================================================================================================================
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Help')
+def handle_help(message):
+    user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
+    user_markup.row('Contact us'u'\U00002709')
+    user_markup.row('Back')
+    inline_keyboard = types.InlineKeyboardMarkup()
+    help_button = types.InlineKeyboardButton(text='Open', callback_game='t.me/MyKPI_bot?game=Manual')
+    inline_keyboard.add(help_button)
+    conn.bot.send_message(message.from_user.id, "Help", reply_markup=user_markup)
+    conn.bot.send_game(chat_id=message.chat.id, game_short_name='Manual', reply_markup=inline_keyboard)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Contact us'u'\U00002709')
+def handle_contact(message):
+    conn.bot.send_message(message.from_user.id,
+                          'We are always happy to help you in any situation. '
+                          'Please, contact: \n@Max_Urzhumtsev',
+                          reply_markup=BACK_BUTTON)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Settings'u'\U00002699')
+def handle_settings(message):
+    db = dbconn.PGadmin()
+    manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
+    db.close()
+    if manager is None:
+        conn.bot.send_message(message.from_user.id, 'Settings', reply_markup=BACK_BUTTON)
+        return 0
+    user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
+    user_markup.row('Full statement')
+    user_markup.row('Manage store')
+    user_markup.row('Reassigning Manager')
+    user_markup.row('Back')
+    conn.bot.send_message(message.from_user.id, 'Settings', reply_markup=user_markup)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Back')
+def handle_back(message):
+    db = dbconn.PGadmin()
+    db.update('users', 'user_position=0', 'telegram_id={}'.format(message.from_user.id))
+    db.close()
+    conn.bot.send_message(message.from_user.id, 'Main menu', reply_markup=KEYBOARD)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Balance')
+def handle_balance(message):
+    uid = message.from_user.id
+    db = dbconn.PGadmin()
+    balance = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
+    db.close()
+    if balance is not None:
+        inline_keyboard = types.InlineKeyboardMarkup()
+        statement = types.InlineKeyboardButton(text='Statement', callback_data=balance[5] + ' statement')
+        inline_keyboard.add(statement)
+        conn.bot.send_message(uid, 'Your balance: ', reply_markup=BACK_BUTTON)
+        conn.bot.send_message(uid, str(balance[8]), reply_markup=inline_keyboard)
+    else:
+        user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
+        user_markup.row('Sign up')
+        conn.bot.send_message(uid, 'Sign up, please', reply_markup=user_markup)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Reassigning Manager')
+def handle_reassigning(message):
+    uid = message.from_user.id
+    db = dbconn.PGadmin()
+    manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
+    db.close()
+    if manager is not None:
+        db = dbconn.PGadmin()
+        db.update('users', 'user_position=3', 'telegram_id={}'.format(uid))
+        db.close()
+        conn.bot.send_message(uid, "Please specify @username of the colleague.", reply_markup=BACK_BUTTON)
+    else:
+        conn.bot.send_message(uid,
+                              'ERROR: You are not in the managers list, who can set another managers.',
+                              reply_markup=BACK_BUTTON)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Manage store')
+def handle_manage_store(message):
+    uid = message.from_user.id
+    db = dbconn.PGadmin()
+    manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
+    db.close()
+    if manager is None:
+        conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
+        return 0
+    db = dbconn.PGadmin()
+    store = db.select_all1('*', 'store', 'manager={}'.format(uid))
+    db.close()
+    if len(store) == 0:
+        conn.bot.send_message(uid, 'No items.')
+        db = dbconn.PGadmin()
+        db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
+        db.close()
+        conn.bot.send_message(uid, 'Please, specify an item.', reply_markup=BACK_BUTTON)
+    else:
+        for i in range(len(store)):
+            db = dbconn.PGadmin()
+            db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
+            db.close()
+            inline_keyboard = types.InlineKeyboardMarkup()
+            delete = types.InlineKeyboardButton(text='Delete', callback_data=store[i][0] + '_item')
+            inline_keyboard.add(delete)
+            conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
+            conn.bot.send_message(uid, 'Please, specify an item.', reply_markup=BACK_BUTTON)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Store')
+def handle_store(message):
+    uid = message.from_user.id
+    db = dbconn.PGadmin()
+    manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
+    store = db.select_all1('*', 'store', "manager='{}'".format(manager[11]))
+    db.close()
+    if len(store) == 0:
+        conn.bot.send_message(uid, 'No items.', reply_markup=BACK_BUTTON)
+    else:
+        for i in range(len(store)):
+            inline_keyboard = types.InlineKeyboardMarkup()
+            buy = types.InlineKeyboardButton(text='Buy', callback_data=str(store[i][0]) + '_buy')
+            inline_keyboard.add(buy)
+            conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
+        conn.bot.send_message(uid, 'Choose an item.', reply_markup=BACK_BUTTON)
+
+
+@conn.bot.message_handler(func=lambda message: message.text == 'Full statement')
+def handle_full_statement(message):
+    uid = message.from_user.id
+    global url
+    db = dbconn.PGadmin()
+    manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
+    db.close()
+    if manager[9] == 1:
+        db = dbconn.PGadmin()
+        statement = db.select_all1('*', 'operations', "company='{0}'".format(manager[6]))
+        db.close()
+        conn.bot.send_message(uid, 'Please wait...', reply_markup=BACK_BUTTON)
+        spreadsheet = gg.service.spreadsheets().create(body={'properties': {'title': manager[5],
+                                                                            'locale': 'ru_RU'},
+                                                             'sheets': [{'properties': {'sheetType': 'GRID',
+                                                                                        'sheetId': 0, 'title': manager[5],
+                                                                                        'gridProperties': {'rowCount': 1000,
+                                                                                                           'columnCount': 6
+                                                                                                           }
+                                                                                        }
+                                                                         }]
+                                                             }
+                                                       ).execute()
+        service1 = google_credentials.apiclient.discovery.build('drive', 'v3', http=gg.httpAuth)
+        service1.permissions().create(fileId=spreadsheet['spreadsheetId'],
+                                      body={'type': 'anyone', 'role': 'reader'},
+                                      fields='id').execute()
+        for i in range(len(statement)):
+            db = dbconn.PGadmin()
+            cell = db.select_single('*', 'operations', "company='{}'".format(manager[6]))
+            db.close()
+            results = gg.service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet['spreadsheetId'],
+                                                                     body={"valueInputOption": "USER_ENTERED",
+                                                                           "data": [{"range": manager[5]
+                                                                                              + "!A"
+                                                                                              + str(cell[6])
+                                                                                              + ":F" + str(cell[6]),
+                                                                                     "majorDimension": "ROWS",
+                                                                                     "values": [[statement[i][0],
+                                                                                                 statement[i][1],
+                                                                                                 statement[i][2],
+                                                                                                 statement[i][3],
+                                                                                                 statement[i][4],
+                                                                                                 statement[i][5]
+                                                                                                 ]]
+                                                                                     }]
+                                                                           }
+                                                                     ).execute()
+            db = dbconn.PGadmin()
+            db.update('operations', 'num=num+1', "company='{}'".format(manager[6]))
+            db.close()
+            url = 'https://docs.google.com/spreadsheets/d/' + results['spreadsheetId']
+        db = dbconn.PGadmin()
+        db.update('operations', 'num=1', "company='{}'".format(manager[6]))
+        db.close()
+        conn.bot.send_message(uid, url, reply_markup=BACK_BUTTON)
+    else:
+        conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
+
+
+# ================================================================================================================================
+# ==================== HANDLING NON-SPECIFIED COMMANDS WHICH ARE COME AFTER AND DEPENDS ON SPECIFIED COMMANDS ====================
+# ================================================================================================================================
+
 
 @conn.bot.message_handler(content_types=['text'])
 def handle_contact(message):
@@ -430,182 +655,7 @@ def handle_contact(message):
     db = dbconn.PGadmin()
     user_position = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
     db.close()
-    if message.text == 'Sign up':
-        uid = message.from_user.id
-        user_name = '@' + message.from_user.username
-        if message.from_user.last_name is None:
-            name = format(message.from_user.first_name)
-        else:
-            name = format(message.from_user.first_name + ' ' + message.from_user.last_name)
-        db = dbconn.PGadmin()
-        account = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
-        db.close()
-        if account is not None:
-            conn.bot.send_message(uid, 'You are already registered', reply_markup=KEYBOARD)
-        else:
-            db = dbconn.PGadmin()
-            db.insert('users (telegram_id,name,reg_key,user_position,user_name)', (uid,
-                                                                                   name,
-                                                                                   0,
-                                                                                   1,
-                                                                                   user_name.lower()))
-            db.close()
-            hide_keyboard = telebot.types.ReplyKeyboardRemove()
-            conn.bot.send_message(uid,
-                                  'Write the name of your company/team, please. '
-                                  'If a match would not found a new company will be created.',
-                                  reply_markup=hide_keyboard)
-    elif message.text == 'Help':
-        user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-        user_markup.row('Contact us'u'\U00002709')
-        user_markup.row('Back')
-        inline_keyboard = types.InlineKeyboardMarkup()
-        help_button = types.InlineKeyboardButton(text='Open', callback_game='t.me/MyKPI_bot?game=Manual')
-        inline_keyboard.add(help_button)
-        conn.bot.send_message(uid, "Help", reply_markup=user_markup)
-        conn.bot.send_game(chat_id=message.chat.id, game_short_name='Manual', reply_markup=inline_keyboard)
-    elif message.text == 'Back':
-        db = dbconn.PGadmin()
-        db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
-        db.close()
-        
-        conn.bot.send_message(uid, 'Main menu', reply_markup=KEYBOARD)
-    elif message.text == 'Settings'u'\U00002699':
-        user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-        user_markup.row('Full statement')
-        user_markup.row('Manage store')
-        user_markup.row('Reassigning Manager')
-        user_markup.row('Back')
-        conn.bot.send_message(uid, 'Settings', reply_markup=user_markup)
-    elif message.text == 'Full statement':
-        global url
-        db = dbconn.PGadmin()
-        manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
-        db.close()
-        if manager[9] == 1:
-            db = dbconn.PGadmin()
-            statement = db.select_all1('*', 'operations', "company='{0}'".format(manager[6]))
-            db.close()
-            conn.bot.send_message(uid, 'Please wait...', reply_markup=BACK_BUTTON)
-            spreadsheet = gg.service.spreadsheets().create(body={'properties': {'title': manager[5],
-                                                                                'locale': 'ru_RU'},
-                                                                 'sheets': [{'properties': {'sheetType': 'GRID',
-                                                                                            'sheetId': 0, 'title': manager[5],
-                                                                                            'gridProperties': {'rowCount': 1000,
-                                                                                                               'columnCount': 6
-                                                                                                               }
-                                                                                            }
-                                                                             }]
-                                                                 }
-                                                           ).execute()
-            service1 = google_credentials.apiclient.discovery.build('drive', 'v3', http=gg.httpAuth)
-            service1.permissions().create(fileId=spreadsheet['spreadsheetId'],
-                                          body={'type': 'anyone', 'role': 'reader'},
-                                          fields='id').execute()
-            for i in range(len(statement)):
-                db = dbconn.PGadmin()
-                cell = db.select_single('*', 'operations', "company='{}'".format(manager[6]))
-                db.close()
-                results = gg.service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet['spreadsheetId'],
-                                                                         body={"valueInputOption": "USER_ENTERED",
-                                                                               "data": [{"range": manager[5]
-                                                                                                  + "!A"
-                                                                                                  + str(cell[6])
-                                                                                                  + ":F" + str(cell[6]),
-                                                                                         "majorDimension": "ROWS",
-                                                                                         "values": [[statement[i][0],
-                                                                                                     statement[i][1],
-                                                                                                     statement[i][2],
-                                                                                                     statement[i][3],
-                                                                                                     statement[i][4],
-                                                                                                     statement[i][5]
-                                                                                                     ]]
-                                                                                         }]
-                                                                               }
-                                                                         ).execute()
-                db = dbconn.PGadmin()
-                db.update('operations', 'num=num+1', "company='{}'".format(manager[6]))
-                db.close()
-                url = 'https://docs.google.com/spreadsheets/d/' + results['spreadsheetId']
-            db = dbconn.PGadmin()
-            db.update('operations', 'num=1', "company='{}'".format(manager[6]))
-            db.close()
-            conn.bot.send_message(uid, url, reply_markup=BACK_BUTTON)
-        else:
-            conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
-    elif message.text == 'Balance':
-        db = dbconn.PGadmin()
-        balance = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
-        db.close()
-        if balance is not None:
-            inline_keyboard = types.InlineKeyboardMarkup()
-            statement = types.InlineKeyboardButton(text='Statement', callback_data=balance[5] + ' statement')
-            inline_keyboard.add(statement)
-            conn.bot.send_message(uid, 'Your balance: ', reply_markup=BACK_BUTTON)
-            conn.bot.send_message(uid, str(balance[8]), reply_markup=inline_keyboard)
-        else:
-            user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
-            user_markup.row('Sign up')
-            conn.bot.send_message(uid, 'Sign up, please', reply_markup=user_markup)
-    elif message.text == 'Reassigning Manager':
-        db = dbconn.PGadmin()
-        manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
-        db.close()
-        if manager is not None:
-            db = dbconn.PGadmin()
-            db.update('users', 'user_position=3', 'telegram_id={}'.format(uid))
-            db.close()
-            conn.bot.send_message(uid, "Please specify @username of the colleague.", reply_markup=BACK_BUTTON)
-        else:
-            conn.bot.send_message(uid,
-                                  'ERROR: You are not in the managers list, who can set another managers.',
-                                  reply_markup=BACK_BUTTON)
-    elif message.text == 'Manage store':
-        db = dbconn.PGadmin()
-        manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
-        db.close()
-        if manager is not None:
-            db = dbconn.PGadmin()
-            store = db.select_all1('*', 'store', 'manager={}'.format(uid))
-            db.close()
-            if len(store) == 0:
-                conn.bot.send_message(uid, 'No items.')
-                db = dbconn.PGadmin()
-                db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
-                db.close()
-                conn.bot.send_message(uid, 'Please, specify an item.', reply_markup=BACK_BUTTON)
-            else:
-                for i in range(len(store)):
-                    db = dbconn.PGadmin()
-                    db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
-                    db.close()
-                    inline_keyboard = types.InlineKeyboardMarkup()
-                    delete = types.InlineKeyboardButton(text='Delete', callback_data=store[i][0] + '_item')
-                    inline_keyboard.add(delete)
-                    conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
-                    conn.bot.send_message(uid, 'Please, specify an item.', reply_markup=BACK_BUTTON)
-        else:
-            conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
-    elif message.text == 'Store':
-        db = dbconn.PGadmin()
-        manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
-        store = db.select_all1('*', 'store', "manager='{}'".format(manager[11]))
-        db.close()
-        if len(store) == 0:
-            conn.bot.send_message(uid, 'No items.', reply_markup=BACK_BUTTON)
-        else:
-            for i in range(len(store)):
-                inline_keyboard = types.InlineKeyboardMarkup()
-                buy = types.InlineKeyboardButton(text='Buy', callback_data=str(store[i][0]) + '_buy')
-                inline_keyboard.add(buy)
-                conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
-            conn.bot.send_message(uid, 'Choose an item.', reply_markup=BACK_BUTTON)
-    elif message.text == 'Contact us'u'\U00002709':
-        conn.bot.send_message(uid,
-                              'We are always happy to help you in any situation. '
-                              'Please, contact: \n@Max_Urzhumtsev',
-                              reply_markup=BACK_BUTTON)
-    elif user_position[4] == 1:
+    if user_position[4] == 1:
         if message.text:
             db = dbconn.PGadmin()
             company = db.select_single('*', 'companies', "name='{}'".format(message.text))
@@ -637,7 +687,6 @@ def handle_contact(message):
                     conn.bot.send_message(uid, manager[i][2], reply_markup=inline_keyboard)
             else:
                 conn.bot.send_message(uid, 'Error. Try more.')
-
     elif user_position[4] == 3:  # Reassigning Manager
         if message.text:
             db = dbconn.PGadmin()
@@ -812,7 +861,7 @@ def callback_inline(call):
                                                                          'sheets': [{'properties': {'sheetType': 'GRID',
                                                                                                     'sheetId': 0,
                                                                                                     'title': call_data[0],
-                                                                                                    'gridProperties': {'rowCount': 20,
+                                                                                                    'gridProperties': {'rowCount': 1000,
                                                                                                                        'columnCount': 5}
                                                                                                     }
                                                                                      }]
@@ -863,4 +912,4 @@ web.run_app(
     port=conn.WEBHOOK_PORT,
 )
 
-# TODO - make functions for other commands instead "content_types=['text']"
+# TODO - diff db connections for user and manager. It could be helpful in commands - Reassigning Manager, Manage store, Full statement
