@@ -6,10 +6,9 @@ from aiohttp import web
 from telebot import types
 
 import dbconn
-import google_credentials
+import google_credentials as gg
 import my_conn
 
-gg = google_credentials.GgCredits()
 conn = my_conn.MyConn()
 
 
@@ -463,6 +462,7 @@ def handle_help(message):
     user_markup.row('Contact us'u'\U00002709')
     user_markup.row('Back')
     inline_keyboard = types.InlineKeyboardMarkup()
+    # We use telegram game-bot link because if you use "non-telegram links" it will pop confirmation window. So it is not necessary.
     help_button = types.InlineKeyboardButton(text='Open', callback_game='t.me/MyKPI_bot?game=Manual')
     inline_keyboard.add(help_button)
     conn.bot.send_message(message.from_user.id, "Help", reply_markup=user_markup)
@@ -587,61 +587,20 @@ def handle_store(message):
 @conn.bot.message_handler(func=lambda message: message.text == 'Full statement')
 def handle_full_statement(message):
     uid = message.from_user.id
-    global url
+    user = message.from_user.username.lower()
     db = dbconn.PGadmin()
     manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
     db.close()
-    if manager[9] == 1:
-        db = dbconn.PGadmin()
-        statement = db.select_all1('*', 'operations', "company='{0}'".format(manager[6]))
-        db.close()
-        conn.bot.send_message(uid, 'Please wait...', reply_markup=BACK_BUTTON)
-        spreadsheet = gg.service.spreadsheets().create(body={'properties': {'title': manager[5],
-                                                                            'locale': 'ru_RU'},
-                                                             'sheets': [{'properties': {'sheetType': 'GRID',
-                                                                                        'sheetId': 0, 'title': manager[5],
-                                                                                        'gridProperties': {'rowCount': 1000,
-                                                                                                           'columnCount': 6
-                                                                                                           }
-                                                                                        }
-                                                                         }]
-                                                             }
-                                                       ).execute()
-        service1 = google_credentials.apiclient.discovery.build('drive', 'v3', http=gg.httpAuth)
-        service1.permissions().create(fileId=spreadsheet['spreadsheetId'],
-                                      body={'type': 'anyone', 'role': 'reader'},
-                                      fields='id').execute()
-        for i in range(len(statement)):
-            db = dbconn.PGadmin()
-            cell = db.select_single('*', 'operations', "company='{}'".format(manager[6]))
-            db.close()
-            results = gg.service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet['spreadsheetId'],
-                                                                     body={"valueInputOption": "USER_ENTERED",
-                                                                           "data": [{"range": manager[5]
-                                                                                              + "!A"
-                                                                                              + str(cell[6])
-                                                                                              + ":F" + str(cell[6]),
-                                                                                     "majorDimension": "ROWS",
-                                                                                     "values": [[statement[i][0],
-                                                                                                 statement[i][1],
-                                                                                                 statement[i][2],
-                                                                                                 statement[i][3],
-                                                                                                 statement[i][4],
-                                                                                                 statement[i][5]
-                                                                                                 ]]
-                                                                                     }]
-                                                                           }
-                                                                     ).execute()
-            db = dbconn.PGadmin()
-            db.update('operations', 'num=num+1', "company='{}'".format(manager[6]))
-            db.close()
-            url = 'https://docs.google.com/spreadsheets/d/' + results['spreadsheetId']
-        db = dbconn.PGadmin()
-        db.update('operations', 'num=1', "company='{}'".format(manager[6]))
-        db.close()
-        conn.bot.send_message(uid, url, reply_markup=BACK_BUTTON)
-    else:
+    if manager[9] != 1:
         conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
+        return 0
+    db = dbconn.PGadmin()
+    statement = db.select_all1('*', 'operations', "company='{0}'".format(manager[6]))
+    db.close()
+    length = len(statement)
+    conn.bot.send_message(uid, 'Please wait...', reply_markup=BACK_BUTTON)
+    url_to_google = gg.Spreadsheet().add_rows(length, statement, user)
+    conn.bot.send_message(uid, url_to_google, reply_markup=BACK_BUTTON)
 
 
 # ================================================================================================================================
@@ -846,58 +805,19 @@ def callback_inline(call):
                 db.close()
                 conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
             elif 'statement' in call.data:
-                global url
+                user = call.from_user.username.lower()
                 call_data_to_split = format(call.data)
                 call_data = call_data_to_split.split(' ')
                 db = dbconn.PGadmin()
                 statement = db.select_all1('*', 'operations', "to_whom='{0}'".format(call_data[0]))
                 db.close()
+                length = len(statement)
                 if len(statement) == 0:
                     conn.bot.send_message(uid, 'No transactions found.', reply_markup=KEYBOARD)
                 else:
                     conn.bot.send_message(uid, 'Please wait...')
-                    spreadsheet = gg.service.spreadsheets().create(body={'properties': {'title': call_data[0],
-                                                                                        'locale': 'ru_RU'},
-                                                                         'sheets': [{'properties': {'sheetType': 'GRID',
-                                                                                                    'sheetId': 0,
-                                                                                                    'title': call_data[0],
-                                                                                                    'gridProperties': {'rowCount': 1000,
-                                                                                                                       'columnCount': 5}
-                                                                                                    }
-                                                                                     }]
-                                                                         }
-                                                                   ).execute()
-                    service1 = google_credentials.apiclient.discovery.build('drive', 'v3', http=gg.httpAuth)
-                    service1.permissions().create(fileId=spreadsheet['spreadsheetId'],
-                                                  body={'type': 'anyone', 'role': 'reader'},
-                                                  fields='id').execute()
-                    for i in range(len(statement)):
-                        db = dbconn.PGadmin()
-                        cell = db.select_single('*', 'operations', "to_whom='{}'".format(call_data[0]))
-                        db.close()
-                        results = gg.service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet['spreadsheetId'],
-                                                                                 body={"valueInputOption": "USER_ENTERED",
-                                                                                       "data": [{"range": statement[i][1]
-                                                                                                          + "!A" + str(cell[6])
-                                                                                                          + ":E" + str(cell[6]),
-                                                                                                 "majorDimension": "ROWS",
-                                                                                                 "values": [[statement[i][0],
-                                                                                                             statement[i][2],
-                                                                                                             statement[i][3],
-                                                                                                             statement[i][4],
-                                                                                                             statement[i][5]
-                                                                                                             ]]
-                                                                                                 }]
-                                                                                       }
-                                                                                 ).execute()
-                        db = dbconn.PGadmin()
-                        db.update('operations', 'num=num+1', "to_whom='{}'".format(call_data[0]))
-                        db.close()
-                        url = 'https://docs.google.com/spreadsheets/d/' + results['spreadsheetId']
-                    db = dbconn.PGadmin()
-                    db.update('operations', 'num=1', "to_whom='{}'".format(call_data[0]))
-                    db.close()
-                    conn.bot.send_message(uid, url, reply_markup=KEYBOARD)
+                    url_to_google = gg.Spreadsheet().add_rows(length, statement, user)
+                    conn.bot.send_message(uid, url_to_google, reply_markup=KEYBOARD)
         else:
             if call.message.game.description == 'Manual':
                 conn.bot.answer_callback_query(callback_query_id=call.id,
@@ -913,3 +833,4 @@ web.run_app(
 )
 
 # TODO - diff db connections for user and manager. It could be helpful in commands - Reassigning Manager, Manage store, Full statement
+# TODO - redesign google spreadsheets.
