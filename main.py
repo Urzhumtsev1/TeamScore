@@ -73,34 +73,6 @@ def handle_start(message):
         conn.bot.send_message(uid, 'You are at the main menu.', reply_markup=KEYBOARD)
 
 
-@conn.bot.message_handler(func=lambda message: message.text == 'Sign up')
-def handle_sign_up(message):
-    uid = message.from_user.id
-    user_name = '@' + message.from_user.username
-    if message.from_user.last_name is None:
-        name = format(message.from_user.first_name)
-    else:
-        name = format(message.from_user.first_name + ' ' + message.from_user.last_name)
-    db = dbconn.PGadmin()
-    account = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
-    db.close()
-    if account is not None:
-        conn.bot.send_message(uid, 'You are already registered', reply_markup=KEYBOARD)
-    else:
-        db = dbconn.PGadmin()
-        db.insert('users (telegram_id,name,reg_key,user_position,user_name)', (uid,
-                                                                               name,
-                                                                               0,
-                                                                               1,
-                                                                               user_name.lower()))
-        db.close()
-        hide_keyboard = telebot.types.ReplyKeyboardRemove()
-        conn.bot.send_message(uid,
-                              'Write the name of your company/team, please. '
-                              'If a match would not found a new company will be created.',
-                              reply_markup=hide_keyboard)
-
-
 # if it is necessary you can delete all your data from db
 @conn.bot.message_handler(commands=['kill'])
 def handle_new_chat(message):
@@ -456,6 +428,34 @@ def handle_com_team(message):
 # ================================================================================================================================
 
 
+@conn.bot.message_handler(func=lambda message: message.text == 'Sign up')
+def handle_sign_up(message):
+    uid = message.from_user.id
+    user_name = '@' + message.from_user.username
+    if message.from_user.last_name is None:
+        name = format(message.from_user.first_name)
+    else:
+        name = format(message.from_user.first_name + ' ' + message.from_user.last_name)
+    db = dbconn.PGadmin()
+    account = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
+    db.close()
+    if account is not None:
+        conn.bot.send_message(uid, 'You are already registered', reply_markup=KEYBOARD)
+    else:
+        db = dbconn.PGadmin()
+        db.insert('users (telegram_id,name,reg_key,user_position,user_name)', (uid,
+                                                                               name,
+                                                                               0,
+                                                                               1,
+                                                                               user_name.lower()))
+        db.close()
+        hide_keyboard = telebot.types.ReplyKeyboardRemove()
+        conn.bot.send_message(uid,
+                              'Write the name of your company/team, please. '
+                              'If a match would not found a new company will be created.',
+                              reply_markup=hide_keyboard)
+
+
 @conn.bot.message_handler(func=lambda message: message.text == 'Help')
 def handle_help(message):
     user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
@@ -548,14 +548,15 @@ def handle_manage_store(message):
     db = dbconn.PGadmin()
     store = db.select_all1('*', 'store', 'manager={}'.format(uid))
     db.close()
-    if len(store) == 0:
+    length = len(store)
+    if length == 0:
         conn.bot.send_message(uid, 'No items.')
         db = dbconn.PGadmin()
         db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
         db.close()
-        conn.bot.send_message(uid, 'Please, specify an item.', reply_markup=BACK_BUTTON)
+        conn.bot.send_message(uid, 'If you want to add new item - just text its name first.', reply_markup=BACK_BUTTON)
     else:
-        for i in range(len(store)):
+        for i in range(length):
             db = dbconn.PGadmin()
             db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
             db.close()
@@ -563,7 +564,7 @@ def handle_manage_store(message):
             delete = types.InlineKeyboardButton(text='Delete', callback_data=store[i][0] + '_item')
             inline_keyboard.add(delete)
             conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
-            conn.bot.send_message(uid, 'Please, specify an item.', reply_markup=BACK_BUTTON)
+        conn.bot.send_message(uid, 'If you want to add new item - just text its name first.', reply_markup=BACK_BUTTON)
 
 
 @conn.bot.message_handler(func=lambda message: message.text == 'Store')
@@ -604,12 +605,26 @@ def handle_full_statement(message):
 
 
 # ================================================================================================================================
-# ==================== HANDLING NON-SPECIFIED COMMANDS WHICH ARE COME AFTER AND DEPENDS ON SPECIFIED COMMANDS ====================
+# ================= HANDLING NON-SPECIFIED COMMANDS WHICH ARE COME AFTER SPECIFIED COMMANDS AND DEPENDS ON IT ====================
 # ================================================================================================================================
 
 
 @conn.bot.message_handler(content_types=['text'])
-def handle_contact(message):
+def handle_other_messages(message):
+    """
+    When user sending random text to bot, this function checks if this text
+    relates to commands.
+
+    We set user position == 1 in function handle_sign_up()
+    we use it for setting up company/team name that user sent.
+
+    We set user position == 3 in function handle_reassigning()
+    we use it for setting up new manager or delegate its rights
+
+    We set user position == 4 handle_manage_store()
+    we use it adding new item
+    We set user position == 5 in adding new item for further handling
+    like setting up items price."""
     uid = message.from_user.id
     db = dbconn.PGadmin()
     user_position = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
@@ -626,6 +641,7 @@ def handle_contact(message):
                 db.update('users', 'manager=1', 'telegram_id={}'.format(uid))
                 db.close()
                 inline_keyboard = types.InlineKeyboardMarkup()
+                # See HANDLING CALLBACK QUERIES for further details
                 abort = types.InlineKeyboardButton(text='Abort', callback_data=message.text + ' abort')
                 go = types.InlineKeyboardButton(text='Go', callback_data=' go')
                 inline_keyboard.add(abort, go)
@@ -639,14 +655,17 @@ def handle_contact(message):
                 manager = db.select_all1('*', 'users', "manager=1 AND company='{}'".format(company[1]))
                 db.close()
                 conn.bot.send_message(uid, 'Please choose your manager.')
-                for i in range(len(manager)):
+                length = len(manager)
+                for i in range(length):
                     inline_keyboard = types.InlineKeyboardMarkup()
+                    # See HANDLING CALLBACK QUERIES for further details
                     choose = types.InlineKeyboardButton(text='Choose', callback_data=str(manager[i][1]) + ' choose')
                     inline_keyboard.add(choose)
                     conn.bot.send_message(uid, manager[i][2], reply_markup=inline_keyboard)
             else:
                 conn.bot.send_message(uid, 'Error. Try more.')
-    elif user_position[4] == 3:  # Reassigning Manager
+    # Reassigning Manager
+    elif user_position[4] == 3:
         if message.text:
             db = dbconn.PGadmin()
             manager = db.select_single('*', 'users', "user_name='{}'".format(message.text.lower()))
@@ -657,6 +676,7 @@ def handle_contact(message):
                 db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
                 db.close()
                 inline_keyboard = types.InlineKeyboardMarkup()
+                # See HANDLING CALLBACK QUERIES for further details
                 save = types.InlineKeyboardButton(text='Hold', callback_data=' save')
                 delegate = types.InlineKeyboardButton(text='Delegate', callback_data=message.text.lower() + ' delegate')
                 cancel = types.InlineKeyboardButton(text='Cancel', callback_data=message.text.lower() + ' cancel')
@@ -673,7 +693,8 @@ def handle_contact(message):
                                       + message.text
                                       + " not found. Don't you forget to put '@' before 'username'?",
                                       reply_markup=BACK_BUTTON)
-    elif user_position[4] == 4:  # Добавление наименования нового товара
+    # Adding new item
+    elif user_position[4] == 4:
         if message.text:
             db = dbconn.PGadmin()
             db.insert('store (item,manager,price)', (message.text, uid, 0))
@@ -682,22 +703,25 @@ def handle_contact(message):
             conn.bot.send_message(uid,
                                   'Added. Please specify cost of the item.',
                                   reply_markup=BACK_BUTTON)
-    elif user_position[4] == 5:  # Добавление стоимости нового товара
+    # Adding price to new item
+    elif user_position[4] == 5:
         if message.text:
             db = dbconn.PGadmin()
             db.update('store', 'price={}'.format(message.text), 'price=0')
             store = db.select_all1('*', 'store', 'manager={}'.format(uid))
             db.close()
             conn.bot.send_message(uid, 'Done.', reply_markup=BACK_BUTTON)
-            for i in range(len(store)):
+            length = len(store)
+            for i in range(length):
                 db = dbconn.PGadmin()
                 db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
                 db.close()
                 inline_keyboard = types.InlineKeyboardMarkup()
+                # See HANDLING CALLBACK QUERIES for further details
                 delete = types.InlineKeyboardButton(text='Delete', callback_data=store[i][0] + '_item')
                 inline_keyboard.add(delete)
                 conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
-            conn.bot.send_message(uid, 'Please specify new item.', reply_markup=BACK_BUTTON)
+            conn.bot.send_message(uid, 'If you want to add new item - just text its name first.', reply_markup=BACK_BUTTON)
 
 # ================================================================================================================================
 # ================================================== HANDLING CALLBACK QUERIES ===================================================
@@ -729,19 +753,6 @@ def handle_statement(call):
         conn.bot.send_message(uid, url_to_google, reply_markup=KEYBOARD)
 
 
-# When you ressigning manager you can fully delegate rights or save your rights
-@conn.bot.callback_query_handler(func=lambda call: 'save' in call.data)
-def handle_save(call):
-    uid = call.from_user.id
-    db = dbconn.PGadmin()
-    db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
-    db.close()
-
-    conn.bot.send_message(uid,
-                          "Done. Please don't forget to set admins rights for a new manager in group chat.",
-                          reply_markup=KEYBOARD)
-
-
 # Delete all your data
 @conn.bot.callback_query_handler(func=lambda call: 'kill' in call.data)
 def handle_kill(call):
@@ -757,50 +768,6 @@ def handle_kill(call):
                           'Write the name of your company/team, please. '
                           'If a match would not found a new company will be created.',
                           reply_markup=hide_keyboard)
-
-
-# Cancellation of company/team at first registration
-@conn.bot.callback_query_handler(func=lambda call: 'abort' in call.data)
-def handle_abort(call):
-    uid = call.from_user.id
-    db = dbconn.PGadmin()
-    db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
-    db.delete_single('managers', 'user_name', "'@" + call.from_user.username.lower() + "'")
-    db.update('users', 'manager=0', 'telegram_id={}'.format(uid))
-    db.close()
-    conn.bot.send_message(uid, 'Deleted.')
-    conn.bot.send_message(uid, 'Write the name of your company/team, please. '
-                               'If a match would not found a new company will be created.')
-
-
-# This handler starts when when you hit "Go" after company registration
-@conn.bot.callback_query_handler(func=lambda call: 'go' in call.data)
-def handle_go(call):
-    uid = call.from_user.id
-    db = dbconn.PGadmin()
-    db.update('users',
-              'user_position=0, my_manager={}'.format(call.from_user.id),
-              'telegram_id={}'.format(uid))
-    db.close()
-    inline_keyboard = types.InlineKeyboardMarkup()
-    help_button = types.InlineKeyboardButton(text='Open',
-                                             callback_game='t.me/MyKPI_bot?game=Manual')
-    inline_keyboard.add(help_button)
-    conn.bot.send_game(chat_id=call.message.chat.id,
-                       game_short_name='Manual',
-                       reply_markup=inline_keyboard)
-    conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
-
-
-@conn.bot.callback_query_handler(func=lambda call: 'item' in call.data)
-def handle_delete_item(call):
-    uid = call.from_user.id
-    call_data_to_split = format(call.data)
-    call_data = call_data_to_split.split('_')
-    db = dbconn.PGadmin()
-    db.delete_single('store', 'item', "'" + call_data[0] + "'")
-    db.close()
-    conn.bot.send_message(uid, "Deleted", reply_markup=KEYBOARD)
 
 
 @conn.bot.callback_query_handler(func=lambda call: 'buy' in call.data)
@@ -824,7 +791,71 @@ def handle_buy_item_from_store(call):
     conn.bot.send_message(uid, "Done.", reply_markup=KEYBOARD)
 
 
+# Cancellation of company/team at first registration
+# See NON-SPECIFIED COMMANDS
+@conn.bot.callback_query_handler(func=lambda call: 'abort' in call.data)
+def handle_abort(call):
+    uid = call.from_user.id
+    db = dbconn.PGadmin()
+    db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
+    db.delete_single('managers', 'user_name', "'@" + call.from_user.username.lower() + "'")
+    db.update('users', 'manager=0', 'telegram_id={}'.format(uid))
+    db.close()
+    conn.bot.send_message(uid, 'Deleted.')
+    conn.bot.send_message(uid, 'Write the name of your company/team, please. '
+                               'If a match would not found a new company will be created.')
+
+
+# This handler starts when when you hit "Go" after company registration
+# See NON-SPECIFIED COMMANDS
+@conn.bot.callback_query_handler(func=lambda call: 'go' in call.data)
+def handle_go(call):
+    uid = call.from_user.id
+    db = dbconn.PGadmin()
+    db.update('users',
+              'user_position=0, my_manager={}'.format(call.from_user.id),
+              'telegram_id={}'.format(uid))
+    db.close()
+    inline_keyboard = types.InlineKeyboardMarkup()
+    help_button = types.InlineKeyboardButton(text='Open',
+                                             callback_game='t.me/MyKPI_bot?game=Manual')
+    inline_keyboard.add(help_button)
+    conn.bot.send_game(chat_id=call.message.chat.id,
+                       game_short_name='Manual',
+                       reply_markup=inline_keyboard)
+    conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
+
+
+# Choose your manager at first registration if necessary
+# See NON-SPECIFIED COMMANDS
+@conn.bot.callback_query_handler(func=lambda call: 'choose' in call.data)
+def handle_choose(call):
+    uid = call.from_user.id
+    call_data_to_split = format(call.data)
+    call_data = call_data_to_split.split(' ')
+    db = dbconn.PGadmin()
+    db.update('users', 'my_manager={}'.format(call_data[0]), 'telegram_id={}'.format(uid))
+    db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
+    db.close()
+    conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
+
+
+# When you are reassigning manager you can fully delegate rights or save your rights
+# See NON-SPECIFIED COMMANDS
+@conn.bot.callback_query_handler(func=lambda call: 'save' in call.data)
+def handle_save(call):
+    uid = call.from_user.id
+    db = dbconn.PGadmin()
+    db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
+    db.close()
+
+    conn.bot.send_message(uid,
+                          "Done. Please don't forget to set admins rights for a new manager in group chat.",
+                          reply_markup=KEYBOARD)
+
+
 # Handler for delegating managers rights to someone
+# See NON-SPECIFIED COMMANDS
 @conn.bot.callback_query_handler(func=lambda call: 'delegate' in call.data)
 def handle_delegate(call):
     uid = call.from_user.id
@@ -846,6 +877,7 @@ def handle_delegate(call):
 
 
 # Cancellation of managers reassigning
+# See NON-SPECIFIED COMMANDS
 @conn.bot.callback_query_handler(func=lambda call: 'cancel' in call.data)
 def handle_cancel(call):
     uid = call.from_user.id
@@ -858,17 +890,16 @@ def handle_cancel(call):
     conn.bot.send_message(uid, 'Canceled.', reply_markup=KEYBOARD)
 
 
-# Choose your manager at first registration if necessary
-@conn.bot.callback_query_handler(func=lambda call: 'choose' in call.data)
-def handle_choose(call):
+# See NON-SPECIFIED COMMANDS
+@conn.bot.callback_query_handler(func=lambda call: 'item' in call.data)
+def handle_delete_item(call):
     uid = call.from_user.id
     call_data_to_split = format(call.data)
-    call_data = call_data_to_split.split(' ')
+    call_data = call_data_to_split.split('_')
     db = dbconn.PGadmin()
-    db.update('users', 'my_manager={}'.format(call_data[0]), 'telegram_id={}'.format(uid))
-    db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
+    db.delete_single('store', 'item', "'" + call_data[0] + "'")
     db.close()
-    conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
+    conn.bot.send_message(uid, "Deleted", reply_markup=KEYBOARD)
 
 
 conn.bot.remove_webhook()
