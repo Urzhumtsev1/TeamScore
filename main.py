@@ -699,129 +699,176 @@ def handle_contact(message):
                 conn.bot.send_message(uid, store[i][0] + '\n' + str(store[i][1]), reply_markup=inline_keyboard)
             conn.bot.send_message(uid, 'Please specify new item.', reply_markup=BACK_BUTTON)
 
+# ================================================================================================================================
+# ================================================== HANDLING CALLBACK QUERIES ===================================================
+# ================================================================================================================================
 
-@conn.bot.callback_query_handler(func=lambda call: True)
-def callback_inline(call):
+
+@conn.bot.callback_query_handler(func=lambda call: call.game_short_name == 'Manual')
+def callback_manual(call):
+    conn.bot.answer_callback_query(callback_query_id=call.id,
+                                   url='http://telegra.ph/MyKPI-bot-manual-07-09')
+
+
+@conn.bot.callback_query_handler(func=lambda call: 'statement' in call.data)
+def handle_statement(call):
     uid = call.from_user.id
-    if call.message:
-        if call.data is not None:
-            if 'save' in call.data:
-                db = dbconn.PGadmin()
-                db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
-                db.close()
-                
-                conn.bot.send_message(uid,
-                                      "Done. Please don't forget to set admins rights for a new manager in group chat.",
-                                      reply_markup=KEYBOARD)
-            elif 'kill' in call.data:
-                db = dbconn.PGadmin()
-                db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
-                db.delete_single('managers', 'user_name', "'@" + call.from_user.username.lower() + "'")
-                db.delete_single('users', 'telegram_id', uid)
-                db.close()
-                hide_keyboard = telebot.types.ReplyKeyboardRemove()
-                conn.bot.send_message(uid, 'Deleted.')
-                conn.bot.send_message(uid,
-                                      'Write the name of your company/team, please. '
-                                      'If a match would not found a new company will be created.',
-                                      reply_markup=hide_keyboard)
-            elif 'abort' in call.data:
-                db = dbconn.PGadmin()
-                db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
-                db.delete_single('managers', 'user_name', "'@" + call.from_user.username.lower() + "'")
-                db.update('users', 'manager=0', 'telegram_id={}'.format(uid))
-                db.close()
-                conn.bot.send_message(uid, 'Deleted.')
-                conn.bot.send_message(uid, 'Write the name of your company/team, please. '
-                                           'If a match would not found a new company will be created.')
-            elif 'go' in call.data:
-                db = dbconn.PGadmin()
-                db.update('users',
-                          'user_position=0, my_manager={}'.format(call.from_user.id),
-                          'telegram_id={}'.format(uid))
-                db.close()
-                inline_keyboard = types.InlineKeyboardMarkup()
-                help_button = types.InlineKeyboardButton(text='Open',
-                                                         callback_game='t.me/MyKPI_bot?game=Manual')
-                inline_keyboard.add(help_button)
-                conn.bot.send_game(chat_id=call.message.chat.id,
-                                   game_short_name='Manual',
-                                   reply_markup=inline_keyboard)
-                conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
-            elif 'item' in call.data:
-                call_data_to_split = format(call.data)
-                call_data = call_data_to_split.split('_')
-                db = dbconn.PGadmin()
-                db.delete_single('store', 'item', "'" + call_data[0] + "'")
-                db.close()
-                conn.bot.send_message(uid, "Deleted", reply_markup=KEYBOARD)
-            elif 'buy' in call.data:
-                call_data_to_split = format(call.data)
-                call_data = call_data_to_split.split('_')
-                db = dbconn.PGadmin()
-                store = db.select_single('*', 'store', "item='{}'".format(call_data[0]))
-                yourself = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
-                cur_date = db.select('CURRENT_DATE')
-                db.update('users', 'sum=sum-{}'.format(int(store[1])), 'telegram_id={}'.format(uid))
-                db.insert('operations (who,to_whom,date,command,sum,reason,company)', ('Store',
-                                                                                       '@' + call.from_user.username.lower(),
-                                                                                       format(cur_date[0]),
-                                                                                       '/penalty',
-                                                                                       int(store[1]),
-                                                                                       store[0],
-                                                                                       yourself[6]))
-                db.close()
-                conn.bot.send_message(uid, "Done.", reply_markup=KEYBOARD)
-            elif 'delegate' in call.data:
-                call_data_to_split = format(call.data)
-                call_data = call_data_to_split.split(' ')
-                user_name = '@' + call.from_user.username.lower()
-                db = dbconn.PGadmin()
-                telegram_id = db.select_single('*', 'users', "user_name='{}'".format(call_data[0]))
-                db.update('users', 'manager=0, user_position=0', 'telegram_id={}'.format(uid))
-                db.update('chats', "telegram_id={}, user_name='{}'".format(telegram_id[1],
-                                                                           call_data[0]), 'telegram_id={}'.format(uid))
-                db.delete_single('managers', 'user_name', "'" + user_name + "'")
-                db.insert('managers (user_name, num)', (call_data[0], 0))
-                db.close()
-                conn.bot.send_message(uid,
-                                      "All rights have been delegated. "
-                                      "You can't send /rewardteam and /penaltyteam commands anymore.",
-                                      reply_markup=KEYBOARD)
-            elif 'cancel' in call.data:
-                call_data_to_split = format(call.data)
-                call_data = call_data_to_split.split(' ')
-                db = dbconn.PGadmin()
-                db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
-                db.update('users', 'manager=0', "user_name='{}'".format(call_data[0]))
-                db.close()
-                conn.bot.send_message(uid, 'Canceled.', reply_markup=KEYBOARD)
-            elif 'choose' in call.data:
-                call_data_to_split = format(call.data)
-                call_data = call_data_to_split.split(' ')
-                db = dbconn.PGadmin()
-                db.update('users', 'my_manager={}'.format(call_data[0]), 'telegram_id={}'.format(uid))
-                db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
-                db.close()
-                conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
-            elif 'statement' in call.data:
-                user = call.from_user.username.lower()
-                call_data_to_split = format(call.data)
-                call_data = call_data_to_split.split(' ')
-                db = dbconn.PGadmin()
-                statement = db.select_all1('*', 'operations', "to_whom='{0}'".format(call_data[0]))
-                db.close()
-                length = len(statement)
-                if len(statement) == 0:
-                    conn.bot.send_message(uid, 'No transactions found.', reply_markup=KEYBOARD)
-                else:
-                    conn.bot.send_message(uid, 'Please wait...')
-                    url_to_google = gg.Spreadsheet().add_rows(length, statement, user)
-                    conn.bot.send_message(uid, url_to_google, reply_markup=KEYBOARD)
-        else:
-            if call.message.game.description == 'Manual':
-                conn.bot.answer_callback_query(callback_query_id=call.id,
-                                               url='http://telegra.ph/MyKPI-bot-manual-07-09')
+    user = call.from_user.username.lower()
+    call_data_to_split = format(call.data)
+    call_data = call_data_to_split.split(' ')
+    db = dbconn.PGadmin()
+    statement = db.select_all1('*', 'operations', "to_whom='{0}'".format(call_data[0]))
+    db.close()
+    length = len(statement)
+    if len(statement) == 0:
+        conn.bot.send_message(uid, 'No transactions found.', reply_markup=KEYBOARD)
+    else:
+        conn.bot.send_message(uid, 'Please wait...')
+        # Creating google spreadsheet and sending url
+        url_to_google = gg.Spreadsheet().add_rows(length, statement, user)
+        conn.bot.send_message(uid, url_to_google, reply_markup=KEYBOARD)
+
+
+# When you ressigning manager you can fully delegate rights or save your rights
+@conn.bot.callback_query_handler(func=lambda call: 'save' in call.data)
+def handle_save(call):
+    uid = call.from_user.id
+    db = dbconn.PGadmin()
+    db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
+    db.close()
+
+    conn.bot.send_message(uid,
+                          "Done. Please don't forget to set admins rights for a new manager in group chat.",
+                          reply_markup=KEYBOARD)
+
+
+# Delete all your data
+@conn.bot.callback_query_handler(func=lambda call: 'kill' in call.data)
+def handle_kill(call):
+    uid = call.from_user.id
+    db = dbconn.PGadmin()
+    db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
+    db.delete_single('managers', 'user_name', "'@" + call.from_user.username.lower() + "'")
+    db.delete_single('users', 'telegram_id', uid)
+    db.close()
+    hide_keyboard = telebot.types.ReplyKeyboardRemove()
+    conn.bot.send_message(uid, 'Deleted.')
+    conn.bot.send_message(uid,
+                          'Write the name of your company/team, please. '
+                          'If a match would not found a new company will be created.',
+                          reply_markup=hide_keyboard)
+
+
+# Cancellation of company/team at first registration
+@conn.bot.callback_query_handler(func=lambda call: 'abort' in call.data)
+def handle_abort(call):
+    uid = call.from_user.id
+    db = dbconn.PGadmin()
+    db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
+    db.delete_single('managers', 'user_name', "'@" + call.from_user.username.lower() + "'")
+    db.update('users', 'manager=0', 'telegram_id={}'.format(uid))
+    db.close()
+    conn.bot.send_message(uid, 'Deleted.')
+    conn.bot.send_message(uid, 'Write the name of your company/team, please. '
+                               'If a match would not found a new company will be created.')
+
+
+# This handler starts when when you hit "Go" after company registration
+@conn.bot.callback_query_handler(func=lambda call: 'go' in call.data)
+def handle_go(call):
+    uid = call.from_user.id
+    db = dbconn.PGadmin()
+    db.update('users',
+              'user_position=0, my_manager={}'.format(call.from_user.id),
+              'telegram_id={}'.format(uid))
+    db.close()
+    inline_keyboard = types.InlineKeyboardMarkup()
+    help_button = types.InlineKeyboardButton(text='Open',
+                                             callback_game='t.me/MyKPI_bot?game=Manual')
+    inline_keyboard.add(help_button)
+    conn.bot.send_game(chat_id=call.message.chat.id,
+                       game_short_name='Manual',
+                       reply_markup=inline_keyboard)
+    conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
+
+
+@conn.bot.callback_query_handler(func=lambda call: 'item' in call.data)
+def handle_delete_item(call):
+    uid = call.from_user.id
+    call_data_to_split = format(call.data)
+    call_data = call_data_to_split.split('_')
+    db = dbconn.PGadmin()
+    db.delete_single('store', 'item', "'" + call_data[0] + "'")
+    db.close()
+    conn.bot.send_message(uid, "Deleted", reply_markup=KEYBOARD)
+
+
+@conn.bot.callback_query_handler(func=lambda call: 'buy' in call.data)
+def handle_buy_item_from_store(call):
+    uid = call.from_user.id
+    call_data_to_split = format(call.data)
+    call_data = call_data_to_split.split('_')
+    db = dbconn.PGadmin()
+    store = db.select_single('*', 'store', "item='{}'".format(call_data[0]))
+    yourself = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
+    cur_date = db.select('CURRENT_DATE')
+    db.update('users', 'sum=sum-{}'.format(int(store[1])), 'telegram_id={}'.format(uid))
+    db.insert('operations (who,to_whom,date,command,sum,reason,company)', ('Store',
+                                                                           '@' + call.from_user.username.lower(),
+                                                                           format(cur_date[0]),
+                                                                           '/penalty',
+                                                                           int(store[1]),
+                                                                           store[0],
+                                                                           yourself[6]))
+    db.close()
+    conn.bot.send_message(uid, "Done.", reply_markup=KEYBOARD)
+
+
+# Handler for delegating managers rights to someone
+@conn.bot.callback_query_handler(func=lambda call: 'delegate' in call.data)
+def handle_delegate(call):
+    uid = call.from_user.id
+    call_data_to_split = format(call.data)
+    call_data = call_data_to_split.split(' ')
+    user_name = '@' + call.from_user.username.lower()
+    db = dbconn.PGadmin()
+    telegram_id = db.select_single('*', 'users', "user_name='{}'".format(call_data[0]))
+    db.update('users', 'manager=0, user_position=0', 'telegram_id={}'.format(uid))
+    db.update('chats', "telegram_id={}, user_name='{}'".format(telegram_id[1],
+                                                               call_data[0]), 'telegram_id={}'.format(uid))
+    db.delete_single('managers', 'user_name', "'" + user_name + "'")
+    db.insert('managers (user_name, num)', (call_data[0], 0))
+    db.close()
+    conn.bot.send_message(uid,
+                          "All rights have been delegated. "
+                          "You can't send /rewardteam and /penaltyteam commands anymore.",
+                          reply_markup=KEYBOARD)
+
+
+# Cancellation of managers reassigning
+@conn.bot.callback_query_handler(func=lambda call: 'cancel' in call.data)
+def handle_cancel(call):
+    uid = call.from_user.id
+    call_data_to_split = format(call.data)
+    call_data = call_data_to_split.split(' ')
+    db = dbconn.PGadmin()
+    db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
+    db.update('users', 'manager=0', "user_name='{}'".format(call_data[0]))
+    db.close()
+    conn.bot.send_message(uid, 'Canceled.', reply_markup=KEYBOARD)
+
+
+# Choose your manager at first registration if necessary
+@conn.bot.callback_query_handler(func=lambda call: 'choose' in call.data)
+def handle_choose(call):
+    uid = call.from_user.id
+    call_data_to_split = format(call.data)
+    call_data = call_data_to_split.split(' ')
+    db = dbconn.PGadmin()
+    db.update('users', 'my_manager={}'.format(call_data[0]), 'telegram_id={}'.format(uid))
+    db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
+    db.close()
+    conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
 
 
 conn.bot.remove_webhook()
@@ -833,4 +880,3 @@ web.run_app(
 )
 
 # TODO - diff db connections for user and manager. It could be helpful in commands - Reassigning Manager, Manage store, Full statement
-# TODO - redesign google spreadsheets.
