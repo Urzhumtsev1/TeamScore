@@ -212,216 +212,99 @@ def handle_com(message):
             db.close()
 
 
-@conn.bot.message_handler(commands=['rewardteam'])
+@conn.bot.message_handler(commands=['rewardteam', 'penaltyteam'])
 def handle_com_team(message):
-    global data_to_add_finish, reason_finish
     uid = message.from_user.id
     db = dbconn.PGadmin()
-    chat = db.select_single('*', 'chats', 'chat_id={}'.format(message.chat.id))
+    chat = db.select_single('chat_id', 'chats', 'chat_id={}'.format(message.chat.id))
+    manager = db.select_single('user_name, company, manager', 'users', 'telegram_id={0}'.format(uid))
+    chat_members = db.select_all1('*', 'users', "company='{0}'".format(manager[1]))
     db.close()
+    length = len(chat_members)
+    data_to_split = format(message.text)
+    data_for_add = data_to_split.split(' ')
+    is_digit = data_for_add[1].isdigit()
+    reason_len = len(data_for_add)
+    if reason_len <= 2:
+        conn.bot.send_message(message.chat.id, "Please specify the reason.")
+        return 0
+    if is_digit is False:
+        conn.bot.send_message(message.chat.id, "Undefined quantity: " + data_for_add[1])
+        return 0
     if chat is None:
         conn.bot.send_message(message.chat.id, "Bot is not registered in this chat. "
-                                               "If you are manager and bot is paid, please, push /new to register it. "
+                                               "If you are manager, please, send /new in chat to register it. "
                                                "Else you will get an ERROR.")
-    else:
-        if message.chat.id == uid:
-            conn.bot.send_message(uid, "Please reward/penalty in group chats, not in bot interface, "
-                                       "so the Team could see your decisions.")
-        else:
-            db = dbconn.PGadmin()
-            manager = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))  # Двойная фунция. 1 определение на менеджера 2 определение компании
-            chat_members = db.select_all1('*', 'users', "company='{0}'".format(manager[6]))
-            db.close()
-            status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=uid)
-            if manager[9] == 1 and status.status == 'creator' or manager[9] == 1 and status.status == 'administrator':
-                for c in range(len(chat_members)):
-                    status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=chat_members[c][1])
-                    if status.status == 'member':
-                        if chat_members[c][9] == 1:
-                            db = dbconn.PGadmin()
-                            db.update('users', 'quantity=quantity-{}'.format(1), 'telegram_id={}'.format(uid))
-                            db.close()
-                        else:
-                            db = dbconn.PGadmin()
-                            db.update('users', 'quantity=quantity+{}'.format(1), 'telegram_id={}'.format(uid))
-                            db.close()
-                    else:
-                        continue
-                db = dbconn.PGadmin()
-                count = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
-                db.close()
-                if count[10] <= 1:
-                    conn.bot.send_message(uid,
-                                          'ERROR: Less than 2 members (except managers) '
-                                          'in this group chat or all members are administrators.')
-                    db = dbconn.PGadmin()
-                    db.update('users', 'quantity=0', 'telegram_id={}'.format(uid))
-                    db.close()
-                    return
-                else:
-                    count = count[10]
-                for i in range(len(chat_members)):
-                    status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=chat_members[i][1])
-                    if status.status == 'member' or status.status == 'creator' or status.status == 'administrator':
-                        if chat_members[i][9] == 1:
-                            x = 0
-                            print(x)
-                        else:
-                            data_to_split = format(message.text)
-                            data_for_add = data_to_split.split(' ')
-                            is_digit = data_for_add[1].isdigit()
-                            if is_digit is True:
-                                data_to_add_finish = int(data_for_add[1]) // count
-                                reason_len = len(data_for_add)
-                                if reason_len <= 2:
-                                    db = dbconn.PGadmin()
-                                    db.update('users', 'quantity=0', 'telegram_id={}'.format(uid))
-                                    db.close()
-                                    conn.bot.send_message(message.chat.id, "Please specify the reason.")
-                                    return None
-                                else:
-                                    reason1 = data_for_add[2:reason_len]
-                                    reason_finish = ' '.join(reason1)
-                                    db = dbconn.PGadmin()
-                                    cur_date = db.select('CURRENT_DATE')
-                                    db.update('users',
-                                              'sum=sum +{}'.format(data_to_add_finish),
-                                              "user_name='{}'".format(chat_members[i][5]))
-                                    db.insert('operations (who,to_whom,date,command,sum,reason,company)', (manager[5],
-                                                                                                           chat_members[i][5],
-                                                                                                           format(cur_date[0]),
-                                                                                                           data_for_add[0],
-                                                                                                           data_to_add_finish,
-                                                                                                           reason_finish,
-                                                                                                           manager[6]))
-                                    db.update('users', 'quantity=0', 'telegram_id={}'.format(uid))
-                                    db.close()
-                            else:
-                                db = dbconn.PGadmin()
-                                db.update('users', 'quantity=0', 'telegram_id={}'.format(uid))
-                                db.close()
-                                conn.bot.send_message(message.chat.id, "Undefined quantity: " + data_for_add[1])
-                                return None
-                    else:
-                        i = 0
-                        print(i)
-                conn.bot.send_message(uid,
-                                      'You rewarded team. Chat: '
-                                      + message.chat.title
-                                      + '\nquantity (each): '
-                                      + str(data_to_add_finish)
-                                      + '\nReason: '
-                                      + reason_finish)
-            else:
-                conn.bot.send_message(uid, 'ERROR: You are not a manager of this group chat.'
-                                           ' \nPS.: Manager must have admin rights in group chat for rewarding team.')
+        return 0
+    if message.chat.id == uid:
+        conn.bot.send_message(uid, "Please reward/penalty in group chats, not in bot interface, "
+                                   "so the Team could see your decisions.")
+        return 0
+    if manager[2] != 1:
+        conn.bot.send_message(uid, 'ERROR: You are not a manager of this group chat.')
+
+    count = chat_members_count(message, chat_members, length)
+
+    if data_for_add[0] == '/rewardteam':
+        data_for_message = operations_insertion(length, chat_members, data_for_add, count, reason_len, manager, '+')
+
+        conn.bot.send_message(uid, 'You rewarded team. \nChat: '
+                                   + message.chat.title
+                                   + '\nquantity (each): '
+                                   + str(data_for_message[0])
+                                   + '\nReason: '
+                                   + data_for_message[1])
+    if data_for_add[0] == '/penaltyteam':
+        data_for_message = operations_insertion(length, chat_members, data_for_add, count, reason_len, manager, '-')
+
+        conn.bot.send_message(uid, 'You fined team. \nChat: '
+                                   + message.chat.title
+                                   + '\nquantity (each): '
+                                   + str(data_for_message[0])
+                                   + '\nReason: '
+                                   + data_for_message[1])
 
 
-@conn.bot.message_handler(commands=['penaltyteam'])
-def handle_com_team(message):
-    global data_to_add_finish, reason_finish
-    uid = message.from_user.id
-    db = dbconn.PGadmin()
-    chat = db.select_single('*', 'chats', 'chat_id={}'.format(message.chat.id))
-    db.close()
-    if chat is None:
-        conn.bot.send_message(message.chat.id, "Bot is not registered in this chat. "
-                                               "If you are manager and bot is paid, please, push /new to register it. "
-                                               "Else you will get an ERROR.")
-    else:
-        if message.chat.id == uid:
-            conn.bot.send_message(uid,
-                                  "Please reward/penalty in group chats, "
-                                  "not in bot interface, "
-                                  "so the Team could see your decisions.")
-        else:
+def chat_members_count(message, chat_members, length):
+    chat_member_quantity = 0
+    for m in range(length):
+        status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=chat_members[m][1])
+        # Excluding non-members
+        if status.status == 'member' or status.status == 'creator' or status.status == 'administrator':
+            chat_member_quantity += 1
             db = dbconn.PGadmin()
-            manager = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))  # Двойная фунция. 1 определение на менеджера 2 определение компании
-            chat_members = db.select_all1('*', 'users', "company='{0}'".format(manager[6]))
+            is_manager = db.select_single('manager', 'users', 'telegram_id={0}'.format(chat_members[m][1]))
             db.close()
-            status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=uid)
-            if manager[9] == 1 and status.status == 'creator' or manager[9] == 1 and status.status == 'administrator':
-                for c in range(len(chat_members)):
-                    status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=chat_members[c][1])
-                    if status.status == 'member':
-                        if chat_members[c][9] == 1:
-                            db = dbconn.PGadmin()
-                            db.update('users', 'quantity=quantity-{}'.format(1), 'telegram_id={}'.format(uid))
-                            db.close()
-                        else:
-                            db = dbconn.PGadmin()
-                            db.update('users', 'quantity=quantity+{}'.format(1), 'telegram_id={}'.format(uid))
-                            db.close()
-                    else:
-                        continue
-                db = dbconn.PGadmin()
-                count = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
-                db.close()
-                if count[10] <= 1:
-                    conn.bot.send_message(uid,
-                                          'ERROR: Less than 2 members (except managers) '
-                                          'in this group chat or all members are administrators.')
-                    db = dbconn.PGadmin()
-                    db.update('users', 'quantity=0', 'telegram_id={}'.format(uid))
-                    db.close()
-                    return
-                else:
-                    count = count[10]
-                for i in range(len(chat_members)):
-                    status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=chat_members[i][1])
-                    if status.status == 'member' or status.status == 'creator' or status.status == 'administrator':
-                        if chat_members[i][9] == 1:
-                            x = 0
-                            print(x)
-                        else:
-                            data_to_split = format(message.text)
-                            data_for_add = data_to_split.split(' ')
-                            is_digit = data_for_add[1].isdigit()
-                            if is_digit is True:
-                                data_to_add_finish = int(data_for_add[1]) // count
-                                reason_len = len(data_for_add)
-                                if reason_len <= 2:
-                                    db = dbconn.PGadmin()
-                                    db.update('users', 'quantity=0', 'telegram_id={}'.format(uid))
-                                    db.close()
-                                    conn.bot.send_message(message.chat.id, "Please specify the reason.")
-                                    return None
-                                else:
-                                    reason1 = data_for_add[2:reason_len]
-                                    reason_finish = ' '.join(reason1)
-                                    db = dbconn.PGadmin()
-                                    cur_date = db.select('CURRENT_DATE')
-                                    db.update('users',
-                                              'sum=sum -{}'.format(data_to_add_finish),
-                                              "user_name='{}'".format(chat_members[i][5]))
-                                    db.insert('operations (who,to_whom,date,command,sum,reason,company)', (manager[5],
-                                                                                                           chat_members[i][5],
-                                                                                                           format(cur_date[0]),
-                                                                                                           data_for_add[0],
-                                                                                                           data_to_add_finish,
-                                                                                                           reason_finish,
-                                                                                                           manager[6]))
-                                    db.update('users', 'quantity=0', 'telegram_id={}'.format(uid))
-                                    db.close()
-                            else:
-                                db = dbconn.PGadmin()
-                                db.update('users', 'quantity=0', 'telegram_id={}'.format(uid))
-                                db.close()
-                                conn.bot.send_message(message.chat.id, "Undefined quantity: " + data_for_add[1])
-                                return None
-                    else:
-                        i = 0
-                        print(i)
-                conn.bot.send_message(uid,
-                                      'You are fined team. Chat: '
-                                      + message.chat.title
-                                      + '\nquantity (each): '
-                                      + str(data_to_add_finish)
-                                      + '\nReason: '
-                                      + reason_finish)
-            else:
-                conn.bot.send_message(uid, 'ERROR: You are not a manager of this group chat. '
-                                           '\nPS.: Also Manager must have admin rights in group chat.')
+            if is_manager[0] is None:
+                chat_member_quantity -= 1
+    return chat_member_quantity
+
+
+def operations_insertion(length, chat_members, data_for_add, count, reason_len, manager, sign):
+    data_to_add_finish = 0
+    reason_finish = ''
+    for i in range(length):
+        # To avoid self rewarding
+        if chat_members[i][9] == 1:
+            pass
+        else:
+            data_to_add_finish = int(data_for_add[1]) // count
+            reason1 = data_for_add[2:reason_len]
+            reason_finish = ' '.join(reason1)
+            db = dbconn.PGadmin()
+            cur_date = db.select('CURRENT_DATE')
+            db.update('users',
+                      'sum=sum {}{}'.format(sign, data_to_add_finish),
+                      "user_name='{}'".format(chat_members[i][5]))
+            db.insert('operations (who,to_whom,date,command,sum,reason,company)', (manager[0],
+                                                                                   chat_members[i][5],
+                                                                                   format(cur_date[0]),
+                                                                                   data_for_add[0],
+                                                                                   data_to_add_finish,
+                                                                                   reason_finish,
+                                                                                   manager[1]))
+            db.close()
+    return data_to_add_finish, reason_finish
 
 # ================================================================================================================================
 # ================================== GROUP OF FUNCTIONS WHICH ARE HANDLE COMMANDS FROM KEYBOARD ==================================
