@@ -8,6 +8,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # TODO - branch with CSV
 class GgCredits:
     def __init__(self):
+        # You personal connection settings to Google API
         self.CREDENTIALS_FILE = "/var/www/telegrambots/kpi/table-b0cc9ceed3d8.json" 
         self.credentials = ServiceAccountCredentials.from_json_keyfile_name(self.CREDENTIALS_FILE,
                                                                             ['https://www.googleapis.com/auth/spreadsheets',
@@ -20,6 +21,7 @@ class GgCredits:
 class Spreadsheet(GgCredits):
     def create_document(self, length, user):
         # Setting parameters to the spreadsheet
+        # ATTENTION! Change "locale" parameter if necessary
         document_create = {'properties': {'title': 'Report for ' + user,
                                           'locale': 'ru_RU'},
                            'sheets': [{'properties': {'sheetType': 'GRID',
@@ -30,7 +32,6 @@ class Spreadsheet(GgCredits):
                                                       }
                                        }]
                            }
-        # Create it
         spreadsheet = self.service.spreadsheets().create(body=document_create).execute()
         # Setting permissions to spreadsheet. Object service(which v4) has no attribute permissions, so we use v3.
         self.service1.permissions().create(fileId=spreadsheet['spreadsheetId'],
