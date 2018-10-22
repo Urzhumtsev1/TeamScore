@@ -50,14 +50,14 @@ BACK_BUTTON = keyboard_back_button()
 def handle_start(message):
     # Checks if user is new or in our db
     uid = message.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     telegram_id = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
     db.close()
     if telegram_id is not None:
         reg_key = telegram_id[3]
     else:
         reg_key = 1
-        conn.bot.send_message(uid, 'Welcome to MyKPI_bot, TeamScore clone! \nSign up, please!')
+        conn.bot.send_message(uid, 'Welcome to TeamScore_bot, TeamScore Project clone! \nSign up, please!')
     if reg_key == 1:
         # If user is new
         keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
@@ -91,7 +91,7 @@ def handle_new_chat(message):
 def handle_new_chat(message):
     uid = message.from_user.id
     user_name = '@' + message.from_user.username.lower()
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     manager = db.select_single('*', 'managers', "user_name='{0}'".format(user_name))
     chat = db.select_single('*', 'chats', "user_name='{0}'".format(user_name))
     chat2 = db.select_single('*', 'chats', 'chat_id={0}'.format(message.chat.id))
@@ -106,7 +106,7 @@ def handle_new_chat(message):
                                       'ERROR: Sorry! But you are not in the list of managers or bot is not paid yet. '
                                       'Please, contact us: @Max_Urzhumtsev')
             elif manager[0].lower() == user_name.lower():
-                db = dbconn.PGadmin()
+                db = dbconn.PgAdmin()
                 db.insert('chats (telegram_id,user_name,chat_id,company)', (uid,
                                                                             user_name,
                                                                             message.chat.id,
@@ -126,7 +126,7 @@ def handle_com(message):
     uid = message.from_user.id
     # Trying to figure out if user want to reward/penalty: yourself, in bot interface or in chat.
     # We will use this data also in insertion of operation.
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     yourself = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
     chat = db.select_single('*', 'chats', 'chat_id={}'.format(message.chat.id))
     db.close()
@@ -148,7 +148,7 @@ def handle_com(message):
         reason1 = data_for_add[3:reason_len]
         reason_finish1 = ' '.join(reason1)
         # Finding the user to reward/penalty from message
-        db = dbconn.PGadmin()
+        db = dbconn.PgAdmin()
         user = db.select_single('*',
                                 'users',
                                 "user_name='{}'".format(data_for_add[1].lower()))
@@ -176,7 +176,7 @@ def handle_com(message):
             return 0
         else:
             if data_for_add[0] == '/reward':
-                db = dbconn.PGadmin()
+                db = dbconn.PgAdmin()
                 db.update('users',
                           'sum=sum +{}'.format(data_for_add[2]),
                           "user_name='{}'".format(data_for_add[1].lower()))
@@ -188,7 +188,7 @@ def handle_com(message):
                                       + ' reason: '
                                       + reason_finish1)
             elif data_for_add[0] == '/penalty':
-                db = dbconn.PGadmin()
+                db = dbconn.PgAdmin()
                 db.update('users',
                           'sum=sum -{}'.format(data_for_add[2].lower()),
                           "user_name='{}'".format(data_for_add[1].lower()))
@@ -215,7 +215,7 @@ def handle_com(message):
 @conn.bot.message_handler(commands=['rewardteam', 'penaltyteam'])
 def handle_com_team(message):
     uid = message.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     chat = db.select_single('chat_id', 'chats', 'chat_id={}'.format(message.chat.id))
     manager = db.select_single('user_name, company, manager', 'users', 'telegram_id={0}'.format(uid))
     chat_members = db.select_all1('*', 'users', "company='{0}'".format(manager[1]))
@@ -269,10 +269,9 @@ def chat_members_count(message, chat_members, length):
     chat_member_quantity = 0
     for m in range(length):
         status = conn.bot.get_chat_member(chat_id=message.chat.id, user_id=chat_members[m][1])
-        # Excluding non-members
         if status.status == 'member' or status.status == 'creator' or status.status == 'administrator':
             chat_member_quantity += 1
-            db = dbconn.PGadmin()
+            db = dbconn.PgAdmin()
             is_manager = db.select_single('manager', 'users', 'telegram_id={0}'.format(chat_members[m][1]))
             db.close()
             if is_manager[0] is None:
@@ -291,7 +290,7 @@ def operations_insertion(length, chat_members, data_for_add, count, reason_len, 
             data_to_add_finish = int(data_for_add[1]) // count
             reason1 = data_for_add[2:reason_len]
             reason_finish = ' '.join(reason1)
-            db = dbconn.PGadmin()
+            db = dbconn.PgAdmin()
             cur_date = db.select('CURRENT_DATE')
             db.update('users',
                       'sum=sum {}{}'.format(sign, data_to_add_finish),
@@ -319,13 +318,13 @@ def handle_sign_up(message):
         name = format(message.from_user.first_name)
     else:
         name = format(message.from_user.first_name + ' ' + message.from_user.last_name)
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     account = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
     db.close()
     if account is not None:
         conn.bot.send_message(uid, 'You are already registered', reply_markup=KEYBOARD)
     else:
-        db = dbconn.PGadmin()
+        db = dbconn.PgAdmin()
         db.insert('users (telegram_id,name,reg_key,user_position,user_name)', (uid,
                                                                                name,
                                                                                0,
@@ -344,12 +343,7 @@ def handle_help(message):
     user_markup = telebot.types.ReplyKeyboardMarkup(True, True)
     user_markup.row('Contact us'u'\U00002709')
     user_markup.row('Back')
-    inline_keyboard = types.InlineKeyboardMarkup()
-    # We use telegram game-bot link because if you use "non-telegram links" it will pop confirmation window. So it is not necessary.
-    help_button = types.InlineKeyboardButton(text='Open', callback_game='t.me/MyKPI_bot?game=Manual')
-    inline_keyboard.add(help_button)
-    conn.bot.send_message(message.from_user.id, "Help", reply_markup=user_markup)
-    conn.bot.send_game(chat_id=message.chat.id, game_short_name='Manual', reply_markup=inline_keyboard)
+    conn.bot.send_message(message.from_user.id, "https://telegra.ph/Manual-10-19", reply_markup=user_markup)
 
 
 @conn.bot.message_handler(func=lambda message: message.text == 'Contact us'u'\U00002709')
@@ -362,7 +356,7 @@ def handle_contact(message):
 
 @conn.bot.message_handler(func=lambda message: message.text == 'Settings'u'\U00002699')
 def handle_settings(message):
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
     db.close()
     if manager is None:
@@ -378,7 +372,7 @@ def handle_settings(message):
 
 @conn.bot.message_handler(func=lambda message: message.text == 'Back')
 def handle_back(message):
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     db.update('users', 'user_position=0', 'telegram_id={}'.format(message.from_user.id))
     db.close()
     conn.bot.send_message(message.from_user.id, 'Main menu', reply_markup=KEYBOARD)
@@ -387,7 +381,7 @@ def handle_back(message):
 @conn.bot.message_handler(func=lambda message: message.text == 'Balance')
 def handle_balance(message):
     uid = message.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     balance = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
     db.close()
     if balance is not None:
@@ -405,11 +399,11 @@ def handle_balance(message):
 @conn.bot.message_handler(func=lambda message: message.text == 'Reassigning Manager')
 def handle_reassigning(message):
     uid = message.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
     db.close()
     if manager is not None:
-        db = dbconn.PGadmin()
+        db = dbconn.PgAdmin()
         db.update('users', 'user_position=3', 'telegram_id={}'.format(uid))
         db.close()
         conn.bot.send_message(uid, "Please specify @username of the colleague.", reply_markup=BACK_BUTTON)
@@ -422,25 +416,25 @@ def handle_reassigning(message):
 @conn.bot.message_handler(func=lambda message: message.text == 'Manage store')
 def handle_manage_store(message):
     uid = message.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     manager = db.select_single('*', 'managers', "user_name='{}'".format('@' + message.from_user.username.lower()))
     db.close()
     if manager is None:
         conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
         return 0
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     store = db.select_all1('*', 'store', 'manager={}'.format(uid))
     db.close()
     length = len(store)
     if length == 0:
         conn.bot.send_message(uid, 'No items.')
-        db = dbconn.PGadmin()
+        db = dbconn.PgAdmin()
         db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
         db.close()
         conn.bot.send_message(uid, 'If you want to add new item - just text its name first.', reply_markup=BACK_BUTTON)
     else:
         for i in range(length):
-            db = dbconn.PGadmin()
+            db = dbconn.PgAdmin()
             db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
             db.close()
             inline_keyboard = types.InlineKeyboardMarkup()
@@ -453,7 +447,7 @@ def handle_manage_store(message):
 @conn.bot.message_handler(func=lambda message: message.text == 'Store')
 def handle_store(message):
     uid = message.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
     store = db.select_all1('*', 'store', "manager='{}'".format(manager[11]))
     db.close()
@@ -472,15 +466,18 @@ def handle_store(message):
 def handle_full_statement(message):
     uid = message.from_user.id
     user = message.from_user.username.lower()
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     manager = db.select_single('*', 'users', 'telegram_id={}'.format(uid))
     db.close()
     if manager[9] != 1:
         conn.bot.send_message(uid, 'ERROR: You are not in the managers list.', reply_markup=BACK_BUTTON)
         return 0
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     statement = db.select_all1('*', 'operations', "company='{0}'".format(manager[6]))
     db.close()
+    if statement == []:
+        conn.bot.send_message(uid, 'No transactions found', reply_markup=BACK_BUTTON)
+        return 0
     length = len(statement)
     conn.bot.send_message(uid, 'Please wait...', reply_markup=BACK_BUTTON)
     url_to_google = gg.Spreadsheet().add_rows(length, statement, user)
@@ -509,19 +506,20 @@ def handle_other_messages(message):
     We set user position == 5 in adding new item for further handling
     like setting up items price."""
     uid = message.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     user_position = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
     db.close()
     if user_position[4] == 1:
         if message.text:
-            db = dbconn.PGadmin()
+            db = dbconn.PgAdmin()
             company = db.select_single('*', 'companies', "name='{}'".format(message.text))
             db.close()
             if company is None:
-                db = dbconn.PGadmin()
+                db = dbconn.PgAdmin()
                 db.insert('managers (user_name,num)', ('@' + message.from_user.username.lower(), 0))
                 db.insert('companies (name, manager)', (message.text, '@' + message.from_user.username.lower()))
                 db.update('users', 'manager=1', 'telegram_id={}'.format(uid))
+                db.update('users', "company='{}'".format(message.text), 'telegram_id={}'.format(uid))
                 db.close()
                 inline_keyboard = types.InlineKeyboardMarkup()
                 # See HANDLING CALLBACK QUERIES for further details
@@ -533,7 +531,7 @@ def handle_other_messages(message):
                                       'Push "abort" to delete company/team.',
                                       reply_markup=inline_keyboard)
             elif message.text == company[1]:
-                db = dbconn.PGadmin()
+                db = dbconn.PgAdmin()
                 db.update('users', "company='{}'".format(company[1]), 'telegram_id={}'.format(uid))
                 manager = db.select_all1('*', 'users', "manager=1 AND company='{}'".format(company[1]))
                 db.close()
@@ -550,11 +548,11 @@ def handle_other_messages(message):
     # Reassigning Manager
     elif user_position[4] == 3:
         if message.text:
-            db = dbconn.PGadmin()
+            db = dbconn.PgAdmin()
             manager = db.select_single('*', 'users', "user_name='{}'".format(message.text.lower()))
             db.close()
             if manager[5] == message.text.lower():
-                db = dbconn.PGadmin()
+                db = dbconn.PgAdmin()
                 db.update('users', 'manager=1', "user_name='{}'".format(message.text.lower()))
                 db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
                 db.close()
@@ -579,7 +577,7 @@ def handle_other_messages(message):
     # Adding new item
     elif user_position[4] == 4:
         if message.text:
-            db = dbconn.PGadmin()
+            db = dbconn.PgAdmin()
             db.insert('store (item,manager,price)', (message.text, uid, 0))
             db.update('users', 'user_position=5', 'telegram_id={}'.format(uid))
             db.close()
@@ -589,14 +587,14 @@ def handle_other_messages(message):
     # Adding price to new item
     elif user_position[4] == 5:
         if message.text:
-            db = dbconn.PGadmin()
+            db = dbconn.PgAdmin()
             db.update('store', 'price={}'.format(message.text), 'price=0')
             store = db.select_all1('*', 'store', 'manager={}'.format(uid))
             db.close()
             conn.bot.send_message(uid, 'Done.', reply_markup=BACK_BUTTON)
             length = len(store)
             for i in range(length):
-                db = dbconn.PGadmin()
+                db = dbconn.PgAdmin()
                 db.update('users', 'user_position=4', 'telegram_id={}'.format(uid))
                 db.close()
                 inline_keyboard = types.InlineKeyboardMarkup()
@@ -614,7 +612,7 @@ def handle_other_messages(message):
 @conn.bot.callback_query_handler(func=lambda call: call.game_short_name == 'Manual')
 def callback_manual(call):
     conn.bot.answer_callback_query(callback_query_id=call.id,
-                                   url='http://telegra.ph/MyKPI-bot-manual-07-09')
+                                   url='https://telegra.ph/Manual-10-19')
 
 
 @conn.bot.callback_query_handler(func=lambda call: 'statement' in call.data)
@@ -623,7 +621,7 @@ def handle_statement(call):
     user = call.from_user.username.lower()
     call_data_to_split = format(call.data)
     call_data = call_data_to_split.split(' ')
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     statement = db.select_all1('*', 'operations', "to_whom='{0}'".format(call_data[0]))
     db.close()
     length = len(statement)
@@ -640,7 +638,7 @@ def handle_statement(call):
 @conn.bot.callback_query_handler(func=lambda call: 'kill' in call.data)
 def handle_kill(call):
     uid = call.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
     db.delete_single('managers', 'user_name', "'@" + call.from_user.username.lower() + "'")
     db.delete_single('users', 'telegram_id', uid)
@@ -658,7 +656,7 @@ def handle_buy_item_from_store(call):
     uid = call.from_user.id
     call_data_to_split = format(call.data)
     call_data = call_data_to_split.split('_')
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     store = db.select_single('*', 'store', "item='{}'".format(call_data[0]))
     yourself = db.select_single('*', 'users', 'telegram_id={0}'.format(uid))
     cur_date = db.select('CURRENT_DATE')
@@ -679,7 +677,7 @@ def handle_buy_item_from_store(call):
 @conn.bot.callback_query_handler(func=lambda call: 'abort' in call.data)
 def handle_abort(call):
     uid = call.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     db.delete_single('companies', 'manager', "'@" + call.from_user.username.lower() + "'")
     db.delete_single('managers', 'user_name', "'@" + call.from_user.username.lower() + "'")
     db.update('users', 'manager=0', 'telegram_id={}'.format(uid))
@@ -694,19 +692,12 @@ def handle_abort(call):
 @conn.bot.callback_query_handler(func=lambda call: 'go' in call.data)
 def handle_go(call):
     uid = call.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     db.update('users',
               'user_position=0, my_manager={}'.format(call.from_user.id),
               'telegram_id={}'.format(uid))
     db.close()
-    inline_keyboard = types.InlineKeyboardMarkup()
-    help_button = types.InlineKeyboardButton(text='Open',
-                                             callback_game='t.me/MyKPI_bot?game=Manual')
-    inline_keyboard.add(help_button)
-    conn.bot.send_game(chat_id=call.message.chat.id,
-                       game_short_name='Manual',
-                       reply_markup=inline_keyboard)
-    conn.bot.send_message(uid, 'You are in the main menu.', reply_markup=KEYBOARD)
+    conn.bot.send_message(uid, 'https://telegra.ph/Manual-10-19', reply_markup=KEYBOARD)
 
 
 # Choose your manager at first registration if necessary
@@ -716,7 +707,7 @@ def handle_choose(call):
     uid = call.from_user.id
     call_data_to_split = format(call.data)
     call_data = call_data_to_split.split(' ')
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     db.update('users', 'my_manager={}'.format(call_data[0]), 'telegram_id={}'.format(uid))
     db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
     db.close()
@@ -728,7 +719,7 @@ def handle_choose(call):
 @conn.bot.callback_query_handler(func=lambda call: 'save' in call.data)
 def handle_save(call):
     uid = call.from_user.id
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
     db.close()
 
@@ -745,7 +736,7 @@ def handle_delegate(call):
     call_data_to_split = format(call.data)
     call_data = call_data_to_split.split(' ')
     user_name = '@' + call.from_user.username.lower()
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     telegram_id = db.select_single('*', 'users', "user_name='{}'".format(call_data[0]))
     db.update('users', 'manager=0, user_position=0', 'telegram_id={}'.format(uid))
     db.update('chats', "telegram_id={}, user_name='{}'".format(telegram_id[1],
@@ -766,7 +757,7 @@ def handle_cancel(call):
     uid = call.from_user.id
     call_data_to_split = format(call.data)
     call_data = call_data_to_split.split(' ')
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     db.update('users', 'user_position=0', 'telegram_id={}'.format(uid))
     db.update('users', 'manager=0', "user_name='{}'".format(call_data[0]))
     db.close()
@@ -779,7 +770,7 @@ def handle_delete_item(call):
     uid = call.from_user.id
     call_data_to_split = format(call.data)
     call_data = call_data_to_split.split('_')
-    db = dbconn.PGadmin()
+    db = dbconn.PgAdmin()
     db.delete_single('store', 'item', "'" + call_data[0] + "'")
     db.close()
     conn.bot.send_message(uid, "Deleted", reply_markup=KEYBOARD)
