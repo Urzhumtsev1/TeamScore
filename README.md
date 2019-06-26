@@ -98,7 +98,7 @@ server {
 ```
 Open port 7127 or any other
 
->sudo iptables -A INPUT -p tcp --dport 7127 --jump ACCEPT
+>sudo iptables -I INPUT 1 -p tcp --dport 7127 -j ACCEPT
 
 >iptables-save 
 (won't work after reboot)
